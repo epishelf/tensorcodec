@@ -1,6 +1,6 @@
 # Image codecs
 
-Decode JPEG, PNG, WebP, GIF and AVIF into NumPy arrays, and encode grayscale or
+Decode JPEG, PNG, WebP, GIF, AVIF and BMP into NumPy arrays, and encode grayscale or
 RGB arrays as JPEG or PNG. Decoding returns CHW images or NCHW animations on CPU.
 
 ```sh
@@ -20,11 +20,14 @@ encoded = JpegEncoder(rgb).to_tensor(quality=90)  # 1-D uint8 NumPy array
 
 ## Installation
 
-The current image backend uses OpenCV 4.13+. An existing compatible `cv2`
-installation is sufficient; otherwise the `images` extra installs
+The image backend uses OpenCV 4.12+ (tested with 4.12, 4.13 and 5.0); earlier
+`opencv-python-headless` wheels lack the GIF and AVIF decoders. An existing compatible
+`cv2` installation is sufficient; otherwise the `images` extra installs
 `opencv-python-headless`. Use only one OpenCV wheel variant per environment.
 NumPy is the only required dependency for the base package. Image dependencies
 are separate from the base wheel size. Pillow is used only in tests.
+
+Image codecs do not need `tensorcodec-av`, so they also work on platforms without its wheels.
 
 ## Contract and limits
 
@@ -44,8 +47,11 @@ are separate from the base wheel size. Pillow is used only in tests.
 - AVIF color conversion follows OpenCV. Dropping alpha preserves straight RGB;
   TorchCodec 0.17.0 premultiplies AVIF RGB in that case. Pixel identity with
   TorchCodec is not promised across formats, builds or codec versions.
-- HEIC is unsupported.
-- Other formats depend on the installed OpenCV build. Missing dependencies,
+- `decode_image` also detects BMP; as in Pillow, only 32-bit `BI_BITFIELDS`
+  BMPs with an alpha mask keep alpha.
+- HEIC and TIFF (OpenCV alters unassociated alpha) are unsupported.
+- Other formats depend on the installed OpenCV build (the Windows wheel has no
+  AVIF decoder). Missing dependencies,
   unsupported codecs and decode failures raise; no alternate decoder is tried.
 - Encoders accept nonempty CHW uint8 arrays with 1 or 3 channels. Both provide
   `to_file`, `to_file_like` and `to_tensor`; JPEG quality is 1–100 (default 75),

@@ -448,8 +448,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "61c41af27dd6d1e27b1b16b489db798443478cef1f06a660c96db617ba5de3b1"
 
 [[package]]
-name = "tensorcodec-native"
-version = "0.2.0"
+name = "tensorcodec-av"
+version = "0.3.0"
 dependencies = [
  "ffmpeg-sys-next",
  "libc",

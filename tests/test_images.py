@@ -54,18 +54,10 @@ def encoded_images(tmp_path_factory):
     }.items():
         run_ffmpeg("-i", root / "source.png", "-frames:v", 1, *options, "-threads", 1, root / f"image.{codec}")
     Image.fromarray(pixels).save(root / "image.webp", lossless=True)
-    (root / "second.png").write_bytes(png_bytes(255 - pixels))
-    run_ffmpeg(
-        "-framerate",
-        2,
-        "-pattern_type",
-        "glob",
-        "-i",
-        str(root / "s*.png"),
-        "-threads",
-        1,
-        root / "animated.gif",
-    )
+    # Numbered sequence: FFmpeg's glob pattern type is unavailable on Windows.
+    for index, frame in enumerate((pixels, 255 - pixels)):
+        (root / f"frame{index}.png").write_bytes(png_bytes(frame))
+    run_ffmpeg("-framerate", 2, "-i", root / "frame%d.png", "-threads", 1, root / "animated.gif")
     return root
 
 
@@ -125,6 +117,13 @@ def test_image_sources_and_content_detection(backend, tmp_path, kind):
 @pytest.mark.parametrize("codec", ["jpeg", "webp", "gif", "avif"])
 def test_format_functions_and_dispatch(backend, encoded_images, codec):
     path = encoded_images / f"image.{codec}"
+    if codec == "avif" and not backend.__name__.startswith("torchcodec"):
+        import cv2
+
+        if not cv2.haveImageReader(str(path)):  # e.g. opencv-python-headless 4.14 on Windows
+            with pytest.raises(RuntimeError, match="codec build support"):
+                backend.decode_avif(path)
+            return
     direct = as_numpy(getattr(backend, f"decode_{codec}")(path))
     assert direct.shape == (3, 16, 24)
     assert direct.dtype == np.uint8
@@ -509,3 +508,51 @@ def test_low_bit_grayscale_transparency(bits):
         result = decode_png(data, mode=mode)
         np.testing.assert_array_equal(result[:-1], np.tile([[[gray, 0]]], (channels, 1, 1)))
         np.testing.assert_array_equal(result[-1], [[0, 255]])
+
+
+def bitfields_bmp(rgba, header_size, alpha_mask):
+    """32-bit BI_BITFIELDS BMP; header_size 40 stores RGB masks only, 124 is BITMAPV5HEADER."""
+    height, width, _ = rgba.shape
+    pixels = rgba[::-1, :, [2, 1, 0, 3]].tobytes()
+    header = struct.pack("<IiiHHIIiiII", header_size, width, height, 1, 32, 3, len(pixels), 2835, 2835, 0, 0)
+    masks = struct.pack("<IIII", 0x00FF0000, 0x0000FF00, 0x000000FF, alpha_mask)
+    if header_size == 40:
+        header += masks[:12]
+    else:
+        header += masks + b"BGRs" + bytes(48) + struct.pack("<IIII", 4, 0, 0, 0)
+    offset = 14 + len(header)
+    return b"BM" + struct.pack("<IHHI", offset + len(pixels), 0, 0, offset) + header + pixels
+
+
+@pytest.mark.parametrize(("pil_mode", "channels"), [("L", 1), ("1", 1), ("P", 3), ("RGB", 3), ("RGBA", 3)])
+def test_bmp_matches_pillow(pil_mode, channels):
+    from tensorcodec.decoders import decode_image
+
+    pixels = np.random.default_rng(7).integers(0, 256, (5, 7, 4), np.uint8)
+    source = Image.fromarray(pixels, "RGBA")
+    output = BytesIO()
+    (source if pil_mode == "RGBA" else source.convert(pil_mode)).save(output, "BMP")
+    data = output.getvalue()
+    # Pillow writes RGBA as 32-bit BI_RGB, whose fourth byte readers treat as padding.
+    expected = np.asarray(Image.open(BytesIO(data)).convert("L" if channels == 1 else "RGB"))
+    if channels == 1:
+        expected = expected[..., None]
+    unchanged = decode_image(data, mode="UNCHANGED")
+    np.testing.assert_array_equal(unchanged, expected.transpose(2, 0, 1))
+    rgb = expected if channels == 3 else np.repeat(expected, 3, axis=-1)
+    np.testing.assert_array_equal(decode_image(data), rgb.transpose(2, 0, 1))
+
+
+def test_bmp_alpha():
+    from tensorcodec.decoders import decode_image, decode_png
+
+    rgba = np.random.default_rng(8).integers(0, 256, (5, 7, 4), np.uint8)
+    data = bitfields_bmp(rgba, 124, 0xFF000000)
+    assert Image.open(BytesIO(data)).mode == "RGBA"
+    np.testing.assert_array_equal(decode_image(data, mode="UNCHANGED"), rgba.transpose(2, 0, 1))
+    np.testing.assert_array_equal(decode_image(data), rgba[..., :3].transpose(2, 0, 1))
+    with pytest.raises(RuntimeError, match="expected png, got bmp"):
+        decode_png(data)
+    for header_size, mask in ((124, 0), (40, 0)):
+        opaque = decode_image(bitfields_bmp(rgba, header_size, mask), mode="UNCHANGED")
+        np.testing.assert_array_equal(opaque, rgba[..., :3].transpose(2, 0, 1))

@@ -7,7 +7,7 @@ uv venv
 uv pip install tensorcodec
 ```
 
-Supported Linux wheels include minimal shared FFmpeg 7.1.5 (with dav1d for AV1) and OpenSSL libraries.
+Supported platforms get `tensorcodec-av` wheels with minimal shared FFmpeg 7.1.5 (with dav1d for AV1) and OpenSSL libraries.
 No FFmpeg CLI, Pixi, Rust or libclang is required at runtime. This is the recommended
 installation for a new environment.
 
@@ -37,8 +37,11 @@ test -f "$FFMPEG_DIR/include/libavcodec/avcodec.h"
 test -f "$FFMPEG_DIR/lib/libavcodec.so.61"
 
 uv venv
-uv pip install --no-binary tensorcodec 'tensorcodec==0.1.5'
+uv pip install 'tensorcodec==0.3.0' 'tensorcodec-av==0.3.0' --no-binary tensorcodec-av
 ```
+
+Only `tensorcodec-av` is built from source; naming it also covers platforms
+without its wheels, such as Intel macOS.
 
 The version/build constraint avoids silently selecting an incompatible FFmpeg
 major. `FFMPEG_DIR` tells the source build where to find headers and libraries;
@@ -49,14 +52,14 @@ paths, also set `LIBCLANG_PATH` to its library directory.
 
 The example uses a GPL-enabled conda-forge build, unlike the minimal LGPL release
 build. Its additional codecs, dependencies and licensing apply to your environment.
-Review [`licenses/README.md`](../licenses/README.md) before redistributing a binary
+Review [`av/licenses/README.md`](../av/licenses/README.md) before redistributing a binary
 built against a different FFmpeg configuration.
 
 For development against the same prefix:
 
 ```sh
 uv sync --group dev
-uv run maturin develop --locked --uv
+uv run maturin develop -m av/Cargo.toml --locked --uv
 ```
 
 Do not reuse an existing `dist/` wheel while verifying this path: it may contain the

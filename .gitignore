@@ -3,7 +3,7 @@
 # ============================================================================
 
 # Rust build artifacts
-/native/target/
+/av/target/
 /.ffmpeg/
 /.native-deps/
 *.pyd

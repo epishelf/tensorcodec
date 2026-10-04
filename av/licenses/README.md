@@ -1,6 +1,6 @@
 # Bundled native libraries
 
-TensorCodec's own code is Apache-2.0 licensed. Linux and macOS wheels bundle shared FFmpeg
+TensorCodec's own code is Apache-2.0 licensed. `tensorcodec-av` Linux and macOS wheels bundle shared FFmpeg
 7.1.5 libraries, built without GPL codec libraries using
 `scripts/build_ffmpeg.sh`. This configuration is LGPL-3.0-or-later. Its notices
 and both the LGPLv3 and incorporated GPLv3 texts are included here. The exact

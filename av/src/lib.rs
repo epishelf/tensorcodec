@@ -134,9 +134,10 @@ fn closed() -> PyErr {
 }
 
 #[pymodule]
-fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
+fn _av(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_class::<Decoder>()?;
     module.add("ffmpeg_version", ffmpeg::version())?;
+    module.add("__version__", env!("CARGO_PKG_VERSION"))?;
     Ok(())
 }
 

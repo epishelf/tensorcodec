@@ -1,0 +1,195 @@
+# Callers run build-python.yml first: validation installs its dist-python wheel.
+name: Build tensorcodec-av
+on:
+  workflow_call:
+permissions:
+  contents: read
+jobs:
+  linux:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            target: x86_64
+          - runner: ubuntu-24.04-arm
+            target: aarch64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.2.0
+        with:
+          python-version: '3.12'
+      - uses: actions/cache/restore@v6
+        id: native-cache
+        with:
+          path: .native-deps
+          key: manylinux2014-${{ matrix.target }}-${{ hashFiles('scripts/build_nasm.sh', 'scripts/build_openssl.sh', 'scripts/build_dav1d.sh', 'scripts/build_ffmpeg.sh') }}
+      - name: Build manylinux2014 wheel
+        uses: PyO3/maturin-action@v1
+        with:
+          target: ${{ matrix.target }}
+          manylinux: '2014'
+          command: build
+          args: -m av/Cargo.toml --release --locked --auditwheel repair --out dist
+          before-script-linux: |
+            /opt/python/cp310-cp310/bin/python -m pip install libclang==18.1.1
+            export LIBCLANG_PATH="$(/opt/python/cp310-cp310/bin/python -c 'from clang import cindex; print(cindex.Config.library_path)')"
+            export BINDGEN_EXTRA_CLANG_ARGS="-I$(gcc -print-file-name=include)"
+            prefix="$PWD/.native-deps"
+            export PKG_CONFIG_PATH="$prefix/openssl/lib/pkgconfig"
+            export LD_LIBRARY_PATH="$prefix/openssl/lib:$prefix/ffmpeg/lib"
+            if [ ! -f "$prefix/ready" ]; then
+              yum install -y perl-core
+              /opt/python/cp310-cp310/bin/python -m pip install meson==1.12.1 ninja==1.13.2
+              export PATH="/opt/python/cp310-cp310/bin:$PATH"
+              if [ "$(uname -m)" = x86_64 ]; then
+                bash scripts/build_nasm.sh "$prefix/nasm"
+                export PATH="$prefix/nasm/bin:$PATH"
+              fi
+              bash scripts/build_openssl.sh "$prefix/openssl"
+              bash scripts/build_ffmpeg.sh "$prefix/ffmpeg"
+              touch "$prefix/ready"
+            fi
+            export FFMPEG_DIR="$prefix/ffmpeg"
+      - name: Check native cache completeness
+        if: always()
+        id: native-ready
+        run: |
+          if [ -f .native-deps/ready ]; then echo 'ready=true' >> "$GITHUB_OUTPUT"; fi
+      - uses: actions/cache/save@v6
+        if: always() && steps.native-ready.outputs.ready == 'true' && steps.native-cache.outputs.cache-hit != 'true'
+        with:
+          path: .native-deps
+          key: ${{ steps.native-cache.outputs.cache-primary-key }}
+      - name: Check final wheel size
+        run: uv run --no-project python scripts/check_wheel_size.py dist/*.whl --output reports/wheel-size.json
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: wheel-size-linux-${{ matrix.target }}
+          path: reports/wheel-size.json
+          if-no-files-found: warn
+      - uses: actions/download-artifact@v8
+        with:
+          name: dist-python
+          path: python-dist
+      - name: Install validation tools and wheels
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+          uv venv
+          uv pip install pytest numpy twine 'opencv-python-headless>=4.12' 'Pillow>=11.3' dist/*.whl python-dist/*.whl
+      - name: Generate baseline runtime fixtures
+        run: uv run --no-sync python scripts/check_wheel_runtime.py generate .runtime-fixtures
+      - name: Test on glibc 2.17 with Python 3.10 and 3.13
+        run: |
+          docker run --rm -v "$PWD:/io:ro" quay.io/pypa/manylinux2014_${{ matrix.target }} bash -euxc '
+            for abi in cp310-cp310 cp313-cp313; do
+              python="/opt/python/$abi/bin/python"
+              "$python" -m venv "/tmp/$abi"
+              runtime="/tmp/$abi/bin/python"
+              if [ "$abi" = cp310-cp310 ]; then "$runtime" -m pip install --only-binary=:all: numpy==1.26.4; fi
+              "$runtime" -m pip install --only-binary=:all: /io/dist/*.whl /io/python-dist/*.whl
+              env -u LD_LIBRARY_PATH "$runtime" /io/scripts/check_wheel_runtime.py check /io/.runtime-fixtures
+            done
+          '
+      - name: Install pinned reference
+        run: uv pip install torch==2.14.1 torchcodec==0.17.0 --index-url https://download.pytorch.org/whl/cpu
+      - name: Use bundled FFmpeg for the reference
+        run: uv run --no-sync python scripts/configure_oracle_ffmpeg.py
+      - name: Validate distribution and playback
+        run: |
+          uv run --no-sync python -m twine check --strict dist/*
+          uv run --no-sync pytest tests/test_video_contract.py tests/test_audio_contract.py --backend torchcodec
+          uv run --no-sync pytest --compare
+      - uses: actions/upload-artifact@v7
+        with:
+          name: dist-av-linux-${{ matrix.target }}
+          path: dist/*.whl
+          if-no-files-found: error
+  macos:
+    runs-on: macos-15
+    env:
+      MACOSX_DEPLOYMENT_TARGET: '14.0'
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.2.0
+        with:
+          python-version: '3.12'
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: av
+      - uses: prefix-dev/setup-pixi@v0.10.2
+        with:
+          pixi-version: v0.81.0
+          run-install: false
+          global-environments: ffmpeg=7.1.1=gpl_*
+          global-cache: true
+      - name: Install build tools
+        run: |
+          brew install nasm pkg-config coreutils meson ninja
+          uv venv
+          uv pip install numpy pytest 'opencv-python-headless>=4.12' 'Pillow>=11.3' 'maturin>=1.8,<2' delocate twine
+          echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
+          echo "LIBCLANG_PATH=$(xcode-select -p)/Toolchains/XcodeDefault.xctoolchain/usr/lib" >> "$GITHUB_ENV"
+          echo "$HOME/.pixi/envs/ffmpeg/bin" >> "$GITHUB_PATH"
+      - uses: actions/cache/restore@v6
+        id: native-cache
+        with:
+          path: .native-deps/macos
+          key: macos14-arm64-${{ hashFiles('scripts/build_openssl.sh', 'scripts/build_dav1d.sh', 'scripts/build_ffmpeg.sh', 'scripts/build_macos_wheel.sh') }}
+      - name: Build and bundle wheel
+        run: bash scripts/build_macos_wheel.sh
+      - uses: actions/cache/save@v6
+        if: always() && steps.native-cache.outputs.cache-hit != 'true' && hashFiles('.native-deps/macos/ready') != ''
+        with:
+          path: .native-deps/macos
+          key: ${{ steps.native-cache.outputs.cache-primary-key }}
+      - name: Hide build-time FFmpeg libraries
+        run: mv .native-deps/macos .native-deps/macos-build-only
+      - uses: actions/download-artifact@v8
+        with:
+          name: dist-python
+          path: python-dist
+      - name: Validate installed wheels
+        run: |
+          uv pip install dist/*.whl python-dist/*.whl
+          python -m twine check --strict dist/*
+          pytest
+          python scripts/check_wheel_runtime.py generate .runtime-fixtures
+      - name: Test clean Python 3.10 and 3.13 environments
+        run: |
+          for version in 3.10 3.13; do
+            uv venv "/tmp/runtime-$version" --python "$version"
+            uv pip install --python "/tmp/runtime-$version/bin/python" dist/*.whl python-dist/*.whl
+            "/tmp/runtime-$version/bin/python" scripts/check_wheel_runtime.py check .runtime-fixtures
+          done
+      - name: Restore build cache
+        if: always()
+        run: |
+          if [ -d .native-deps/macos-build-only ]; then
+            mv .native-deps/macos-build-only .native-deps/macos
+          fi
+      - uses: actions/upload-artifact@v7
+        with:
+          name: dist-av-macos-arm64
+          path: dist/*.whl
+          if-no-files-found: error
+  sdist:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.2.0
+        with:
+          python-version: '3.12'
+      - name: Build and check source distribution
+        run: |
+          uvx --from 'maturin>=1.8,<2' maturin sdist -m av/Cargo.toml --out dist
+          uvx twine check --strict dist/*
+      - uses: actions/upload-artifact@v7
+        with:
+          name: dist-av-sdist
+          path: dist/*.tar.gz
+          if-no-files-found: error
