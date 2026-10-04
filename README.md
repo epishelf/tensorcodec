@@ -130,7 +130,7 @@ Linux CPU wheels, Python 3.12. Download / unpacked size in MiB.
 
 | Package | x86_64 | ARM64 |
 | --- | ---: | ---: |
-| TensorCodec | 11.1 / 26.8 | 10.9 / 23.8 |
+| TensorCodec | 11.1 / 26.7 | 10.9 / 23.7 |
 | PyAV | 33.4 / 125.5 | 31.2 / 90.4 |
 | TorchCodec + PyTorch (CPU) | 196.7 / 704.7 | 160.3 / 585.7 |
 <!-- wheel-size:end -->

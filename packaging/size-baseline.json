@@ -1,21 +1,21 @@
 {
   "tensorcodec": {
-    "version": "0.2.0",
-    "source": "https://pypi.org/project/tensorcodec/0.2.0/",
+    "version": "0.3.0",
+    "source": "https://pypi.org/project/tensorcodec-av/0.3.0/",
     "wheels": [
       {
-        "filename": "tensorcodec-0.2.0-cp310-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
-        "download_bytes": 11645866,
-        "unpacked_bytes": 28088063,
-        "sha256": "609710bfd5bba9738edeeb54553daddf4afb0a4bf563346c6eb43bec1623841d",
-        "url": "https://files.pythonhosted.org/packages/4f/ce/fe4ff542252e18bd2bb84a1b30b02cc427cec8a8876c6949ce72b6fe23b0/tensorcodec-0.2.0-cp310-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl"
+        "filename": "tensorcodec_av-0.3.0-cp310-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
+        "download_bytes": 11625566,
+        "unpacked_bytes": 28024892,
+        "sha256": "41808d144f47bdca446d48c12ec91c3323b24c40f271387681da15b066479218",
+        "url": "https://files.pythonhosted.org/packages/4a/17/296b546e4ddaa1466c77e63a78ce3b32206f704bb2015e0eeb4eea0fe1db/tensorcodec_av-0.3.0-cp310-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl"
       },
       {
-        "filename": "tensorcodec-0.2.0-cp310-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl",
-        "download_bytes": 11409841,
-        "unpacked_bytes": 24962320,
-        "sha256": "48e621dcfe87099a93941e9f7ba3f652fe08a6cb49c57caf0140334c7139d9cb",
-        "url": "https://files.pythonhosted.org/packages/2c/63/a709ac0a083bc72060d817e023e5652ce7ba49c690c20ad77510c4c9e452/tensorcodec-0.2.0-cp310-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl"
+        "filename": "tensorcodec_av-0.3.0-cp310-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl",
+        "download_bytes": 11389580,
+        "unpacked_bytes": 24899149,
+        "sha256": "44c8d91587240f5bef444ea2c5fe2b2be9b94a5c1ed20a3bbf95fdf14a313674",
+        "url": "https://files.pythonhosted.org/packages/bf/11/3d052108cae46725381e24ea014ddbf0c5c8070fee4e5e2f646d15cea9c3/tensorcodec_av-0.3.0-cp310-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl"
       }
     ]
   },
