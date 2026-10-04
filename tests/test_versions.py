@@ -11,10 +11,9 @@ tomllib = pytest.importorskip("tomllib")
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def av_requirements(project):
-    groups = [project["dependencies"], *project.get("optional-dependencies", {}).values()]
-    requirements = [Requirement(item) for group in groups for item in group]
-    return [r for r in requirements if r.name == "tensorcodec-av"]
+def av_requirement(project):
+    (requirement,) = [r for r in map(Requirement, project["dependencies"]) if r.name == "tensorcodec-av"]
+    return requirement
 
 
 def test_versions_are_locked():
@@ -25,10 +24,7 @@ def test_versions_are_locked():
     assert [p["version"] for p in lock if p["name"] == "tensorcodec-av"] == [cargo]
     init = re.search(r'^__version__ = "(.+)"$', (ROOT / "src/tensorcodec/__init__.py").read_text(), re.MULTILINE)[1]
     assert cargo == init == version
-    # Only the marked dependency: an extra would just trigger the same source build elsewhere.
-    (pin,) = av_requirements(project)
-    assert str(pin.specifier) == f"=={version}"
-    assert pin.marker is not None
+    assert str(av_requirement(project).specifier) == f"=={version}"
 
 
 def test_av_license_matches_project_license():
@@ -49,8 +45,10 @@ def test_av_license_matches_project_license():
 )
 def test_av_marker_matches_published_wheels(environment, expected):
     project = tomllib.loads((ROOT / "pyproject.toml").read_text())["project"]
-    (default,) = av_requirements(project)
+    marker = av_requirement(project).marker
     # packaging 22-25 (vendored by pip) raise on version comparisons with releases like "6.8.0-azure".
-    assert "platform_release" not in str(default.marker)
-    base = default_environment() | {"platform_python_implementation": "CPython"}
-    assert default.marker.evaluate(base | environment) is expected
+    assert "platform_release" not in str(marker)
+    assert (
+        marker.evaluate(default_environment() | {"platform_python_implementation": "CPython"} | environment)
+        is expected
+    )

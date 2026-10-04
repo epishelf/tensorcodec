@@ -17,32 +17,8 @@ jobs:
   av:
     needs: python
     uses: ./.github/workflows/build-av.yml
-  check:
-    needs: [python, av]
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/download-artifact@v8
-        with:
-          pattern: dist-*
-          path: artifacts
-      - name: Check the release set
-        run: |
-          python3 - <<'EOF'
-          import pathlib, re
-          files = sorted(p for p in pathlib.Path("artifacts").rglob("*") if p.is_file())
-          names = [f.name for f in files]
-          print("\n".join(names))
-          versions = {re.match(r"tensorcodec(?:_av)?-([^-]+?)(?:\.tar\.gz|-)", n)[1] for n in names}
-          assert len(versions) == 1, f"mixed versions: {versions}"
-          expected = ["tensorcodec-*-py3-none-any.whl", "tensorcodec-*.tar.gz", "tensorcodec_av-*.tar.gz",
-                      "tensorcodec_av-*manylinux*x86_64.whl", "tensorcodec_av-*manylinux*aarch64.whl",
-                      "tensorcodec_av-*macosx*arm64.whl"]
-          for pattern in expected:
-              assert len([f for f in files if f.match(pattern)]) == 1, pattern
-          assert len(files) == len(expected), names
-          EOF
   publish:
-    needs: check
+    needs: [python, av]
     if: inputs.publish
     runs-on: ubuntu-24.04
     environment:

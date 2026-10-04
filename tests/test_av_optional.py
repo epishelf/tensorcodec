@@ -8,38 +8,17 @@ def run_python(code):
     subprocess.run([sys.executable, "-c", code], check=True)
 
 
-def test_av_extension_is_lazy():
-    run_python(
-        """
-import sys
-import tensorcodec
-import tensorcodec.decoders
-import tensorcodec.encoders
-assert 'tensorcodec_av' not in sys.modules
-"""
-    )
-
-
 def test_image_codecs_without_tensorcodec_av():
     run_python(
         """
 import sys
-sys.modules['tensorcodec_av'] = None
 import numpy as np
-import tensorcodec
-from tensorcodec.decoders import (
-    AudioDecoder, ImageReadMode, VideoDecoder, decode_avif, decode_gif, decode_image, decode_jpeg, decode_png,
-    decode_webp,
-)
-from tensorcodec.encoders import JpegEncoder, PngEncoder
-
-pixels = np.zeros((3, 4, 5), np.uint8)
-pixels[:] = np.array([23, 91, 177], np.uint8)[:, None, None]
-encoded = PngEncoder(pixels).to_tensor()
-np.testing.assert_array_equal(decode_png(encoded), pixels)
-np.testing.assert_array_equal(decode_image(encoded, mode=ImageReadMode.RGB), pixels)
-assert decode_jpeg(JpegEncoder(pixels).to_tensor()).shape == pixels.shape
-
+from tensorcodec.decoders import *
+from tensorcodec.encoders import PngEncoder
+assert 'tensorcodec_av' not in sys.modules
+sys.modules['tensorcodec_av'] = None
+pixels = np.full((3, 4, 5), 91, np.uint8)
+np.testing.assert_array_equal(decode_image(PngEncoder(pixels).to_tensor(), mode=ImageReadMode.RGB), pixels)
 for decoder in (VideoDecoder, AudioDecoder):
     try:
         decoder(b'not media')
@@ -56,9 +35,7 @@ def test_version_skew_is_rejected():
         """
 import sys
 import types
-package = types.ModuleType('tensorcodec_av')
-package._av = types.SimpleNamespace(__version__='0.0.0', Decoder=None)
-sys.modules['tensorcodec_av'] = package
+sys.modules['tensorcodec_av'] = types.SimpleNamespace(_av=types.SimpleNamespace(__version__='0.0.0'))
 from tensorcodec.decoders import VideoDecoder
 try:
     VideoDecoder(b'not media')

@@ -159,14 +159,10 @@ See the [compatibility contract](docs/compatibility.md) and
 - **Wheels:** Linux x86_64 and ARM64 (aarch64), glibc 2.17+, CPython 3.10+.
   NumPy must also provide a compatible wheel; newer Python versions may require
   a newer glibc. macOS 14+ wheels support Apple Silicon (Intel Macs: through 0.1.5).
-  `tensorcodec` itself is pure Python; video/audio decoding lives in `tensorcodec-av`, pinned to
-  the same version and installed automatically on those platforms (CPython only). Elsewhere, e.g.
-  Windows and Intel macOS, image codecs work and `VideoDecoder`/`AudioDecoder` raise `ImportError`.
-  Environment markers cannot detect musl, free-threaded CPython or macOS older than 14, so
-  installers there still try `tensorcodec-av` (no wheel; its sdist needs FFmpeg 7 and Rust).
-  For image codecs only there, use `pip install --no-deps tensorcodec numpy`. To build video/audio
-  support from source on a platform without `tensorcodec-av` wheels, install `tensorcodec-av==<same
-  version>` explicitly (needs Rust and FFmpeg 7; see [external FFmpeg](docs/system_ffmpeg.md)).
+  These are `tensorcodec-av` wheels, installed automatically with `tensorcodec` (pure Python).
+  Elsewhere only image codecs work; to build video/audio from source, install
+  `tensorcodec-av==<same version>` ([external FFmpeg](docs/system_ffmpeg.md)). musl and
+  free-threaded CPython cannot be told apart by markers, so there use `pip install --no-deps tensorcodec numpy`.
 - **Exact seeking:** scans packet timestamps when opening the decoder. Incorrect
   container keyframe flags can produce corrupt frames; repaired input or corrected
   frame mappings are needed in that case.
@@ -182,7 +178,7 @@ See [container behavior](docs/container_robustness.md) for seek limitations and
 <details>
 <summary>Build from source and run tests</summary>
 
-`uv sync` builds `av/` (the `tensorcodec-av` package) in place. Its source builds require Rust 1.88+, Clang/libclang, pkg-config and FFmpeg 7 development
+Source builds of `av/` (`tensorcodec-av`) require Rust 1.88+, Clang/libclang, pkg-config and FFmpeg 7 development
 headers/libraries. Python handles API and playback selection; Rust + PyO3 handles
 FFmpeg. Native decoding releases the GIL, allowing separate decoder instances to
 run concurrently across Python threads. Calls on the same instance are serialized.
@@ -195,7 +191,7 @@ uv sync --group dev --group oracle
 uv run --group oracle pytest tests/test_video_contract.py tests/test_audio_contract.py --backend torchcodec
 uv run --group oracle pytest --compare
 
-# Rebuild tensorcodec-av after changing Rust code.
+# Rebuild after changing Rust code.
 uv run --group oracle maturin develop -m av/Cargo.toml --locked --uv
 ```
 

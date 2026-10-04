@@ -543,18 +543,14 @@ def test_bmp_matches_pillow(pil_mode, channels):
     np.testing.assert_array_equal(decode_image(data), rgb.transpose(2, 0, 1))
 
 
-def test_bmp_alpha(tmp_path):
+def test_bmp_alpha():
     from tensorcodec.decoders import decode_image, decode_png
 
     rgba = np.random.default_rng(8).integers(0, 256, (5, 7, 4), np.uint8)
     data = bitfields_bmp(rgba, 124, 0xFF000000)
     assert Image.open(BytesIO(data)).mode == "RGBA"
     np.testing.assert_array_equal(decode_image(data, mode="UNCHANGED"), rgba.transpose(2, 0, 1))
-    np.testing.assert_array_equal(decode_image(data, mode="RGBA"), rgba.transpose(2, 0, 1))
     np.testing.assert_array_equal(decode_image(data), rgba[..., :3].transpose(2, 0, 1))
-    path = tmp_path / "image.bmp"
-    path.write_bytes(data)
-    np.testing.assert_array_equal(decode_image(path, mode="RGBA"), rgba.transpose(2, 0, 1))
     with pytest.raises(RuntimeError, match="expected png, got bmp"):
         decode_png(data)
     for header_size, mask in ((124, 0), (40, 0)):

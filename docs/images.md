@@ -20,21 +20,14 @@ encoded = JpegEncoder(rgb).to_tensor(quality=90)  # 1-D uint8 NumPy array
 
 ## Installation
 
-The image backend uses OpenCV 4.12 or newer, including 5.x. An existing compatible
+The image backend uses OpenCV 4.12+ (tested with 4.12, 4.13 and 5.0); earlier
+`opencv-python-headless` wheels lack the GIF and AVIF decoders. An existing compatible
 `cv2` installation is sufficient; otherwise the `images` extra installs
-`opencv-python-headless`. The bound is measured: the image test suite, including
-the TorchCodec comparisons, passes with `opencv-python-headless` 4.12.0.88,
-4.13.0.92 and 5.0.0.93. With 4.10 and 4.11 everything except GIF and AVIF passes:
-4.12 is the first release whose PyPI wheels build both decoders (OpenCV added GIF
-in 4.11, but its wheels report `GIF: NO` and `AVIF: NO`). The 4.8 and 4.9 wheels
-do not import with NumPy 2. Use only one OpenCV wheel variant per environment.
+`opencv-python-headless`. Use only one OpenCV wheel variant per environment.
 NumPy is the only required dependency for the base package. Image dependencies
 are separate from the base wheel size. Pillow is used only in tests.
 
-Image codecs are pure Python and do not need `tensorcodec-av`, so they work
-on every platform, including Windows and Intel macOS where `pip install
-tensorcodec` does not install `tensorcodec-av`; constructing `VideoDecoder` or
-`AudioDecoder` there raises `ImportError`.
+Image codecs do not need `tensorcodec-av`, so they also work on platforms without its wheels.
 
 ## Contract and limits
 
@@ -54,13 +47,11 @@ tensorcodec` does not install `tensorcodec-av`; constructing `VideoDecoder` or
 - AVIF color conversion follows OpenCV. Dropping alpha preserves straight RGB;
   TorchCodec 0.17.0 premultiplies AVIF RGB in that case. Pixel identity with
   TorchCodec is not promised across formats, builds or codec versions.
-- `decode_image` also detects BMP (no format-specific function). 32-bit
-  `BI_BITFIELDS` BMPs with a nonzero alpha mask keep alpha; other 32-bit BMPs are
-  RGB, as in Pillow, because their fourth byte is padding.
-- HEIC is unsupported. TIFF is not detected: OpenCV premultiplies unassociated
-  alpha and drops gray+alpha samples, so lossless decoding cannot be promised.
-- Format support depends on the installed OpenCV build; for example, the
-  Windows `opencv-python-headless` 4.14 wheel has no AVIF decoder. Missing dependencies,
+- `decode_image` also detects BMP; as in Pillow, only 32-bit `BI_BITFIELDS`
+  BMPs with an alpha mask keep alpha.
+- HEIC and TIFF (OpenCV alters unassociated alpha) are unsupported.
+- Other formats depend on the installed OpenCV build (the Windows wheel has no
+  AVIF decoder). Missing dependencies,
   unsupported codecs and decode failures raise; no alternate decoder is tried.
 - Encoders accept nonempty CHW uint8 arrays with 1 or 3 channels. Both provide
   `to_file`, `to_file_like` and `to_tensor`; JPEG quality is 1–100 (default 75),

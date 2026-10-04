@@ -7,8 +7,7 @@ uv venv
 uv pip install tensorcodec
 ```
 
-On supported platforms this also installs the matching `tensorcodec-av`
-wheel, which includes minimal shared FFmpeg 7.1.5 (with dav1d for AV1) and OpenSSL libraries.
+Supported platforms get `tensorcodec-av` wheels with minimal shared FFmpeg 7.1.5 (with dav1d for AV1) and OpenSSL libraries.
 No FFmpeg CLI, Pixi, Rust or libclang is required at runtime. This is the recommended
 installation for a new environment.
 
@@ -41,10 +40,8 @@ uv venv
 uv pip install 'tensorcodec==0.3.0' 'tensorcodec-av==0.3.0' --no-binary tensorcodec-av
 ```
 
-`tensorcodec` is pure Python; only `tensorcodec-av` is built from source here,
-and naming it explicitly also covers platforms without `tensorcodec-av` wheels (for example
-Intel macOS), where `tensorcodec` does not depend on it. Releases up to 0.2.0 were
-a single package, built from source with `--no-binary tensorcodec`.
+Only `tensorcodec-av` is built from source; naming it also covers platforms
+without its wheels, such as Intel macOS.
 
 The version/build constraint avoids silently selecting an incompatible FFmpeg
 major. `FFMPEG_DIR` tells the source build where to find headers and libraries;
@@ -84,7 +81,7 @@ within the color-conversion tolerances described in the
 
 ## macOS wheels
 
-`tensorcodec-av` macOS 14+ wheels support Apple Silicon, bundling FFmpeg/OpenSSL with `delocate`
+macOS 14+ wheels support Apple Silicon, bundling FFmpeg/OpenSSL with `delocate`
 (0.1.3 through 0.1.5 also had Intel wheels). CI tests
 the installed wheels and clean Python 3.10/3.13 environments. Developers can run
 `scripts/build_macos_wheel.sh` with Rust, Xcode tools, NASM, Meson, Ninja, pkg-config, coreutils,

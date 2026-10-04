@@ -7,9 +7,8 @@ license = "Apache-2.0"
 license-files = ["LICENSE"]
 authors = [{ name = "Suhwan Choi", email = "milkclouds00@gmail.com" }]
 requires-python = ">=3.10"
-# tensorcodec-av is pinned to this exact version. The marker follows its wheel tags (CPython abi3,
-# manylinux x86_64/aarch64, macOS 14+ arm64); elsewhere only the image codecs work. No platform_release
-# check for macOS 14: pip's packaging 22-25 raises on non-PEP 440 Linux kernel releases.
+# Exact pin; the marker follows the tensorcodec-av wheel tags. No platform_release check (macOS 14):
+# pip's packaging 22-25 raises on Linux kernel releases that are not PEP 440 versions.
 dependencies = [
     "numpy>=1.26",
     "tensorcodec-av==0.3.0; platform_python_implementation == 'CPython' and ((sys_platform == 'linux' and (platform_machine == 'x86_64' or platform_machine == 'aarch64')) or (sys_platform == 'darwin' and platform_machine == 'arm64'))",
@@ -41,7 +40,6 @@ build-backend = "hatchling.build"
 packages = ["src/tensorcodec"]
 
 [tool.hatch.build.targets.sdist]
-# av/ keeps the sdist a complete checkout for the uv source below and tests/test_versions.py.
 only-include = ["src", "av", "tests", "docs", "scripts", "benchmarks", "packaging", "README.md", "LICENSE"]
 
 [tool.pytest.ini_options]

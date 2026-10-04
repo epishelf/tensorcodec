@@ -1,5 +1,4 @@
-# Builds and validates every tensorcodec-av distribution. Callers must run build-python.yml first:
-# validation installs its dist-python wheel next to each tensorcodec-av wheel.
+# Callers run build-python.yml first: validation installs its dist-python wheel.
 name: Build tensorcodec-av
 on:
   workflow_call:
@@ -110,13 +109,7 @@ jobs:
           path: dist/*.whl
           if-no-files-found: error
   macos:
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - runner: macos-15
-            arch: arm64
-    runs-on: ${{ matrix.runner }}
+    runs-on: macos-15
     env:
       MACOSX_DEPLOYMENT_TARGET: '14.0'
     steps:
@@ -146,7 +139,7 @@ jobs:
         id: native-cache
         with:
           path: .native-deps/macos
-          key: macos14-${{ matrix.arch }}-${{ hashFiles('scripts/build_openssl.sh', 'scripts/build_dav1d.sh', 'scripts/build_ffmpeg.sh', 'scripts/build_macos_wheel.sh') }}
+          key: macos14-arm64-${{ hashFiles('scripts/build_openssl.sh', 'scripts/build_dav1d.sh', 'scripts/build_ffmpeg.sh', 'scripts/build_macos_wheel.sh') }}
       - name: Build and bundle wheel
         run: bash scripts/build_macos_wheel.sh
       - uses: actions/cache/save@v6
@@ -181,7 +174,7 @@ jobs:
           fi
       - uses: actions/upload-artifact@v7
         with:
-          name: dist-av-macos-${{ matrix.arch }}
+          name: dist-av-macos-arm64
           path: dist/*.whl
           if-no-files-found: error
   sdist:
