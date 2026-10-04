@@ -38,13 +38,13 @@ test -f "$FFMPEG_DIR/include/libavcodec/avcodec.h"
 test -f "$FFMPEG_DIR/lib/libavcodec.so.61"
 
 uv venv
-uv pip install --no-binary tensorcodec-native 'tensorcodec[native]'
+uv pip install 'tensorcodec==0.3.0' 'tensorcodec-native==0.3.0' --no-binary tensorcodec-native
 ```
 
-`tensorcodec` is pure Python; only `tensorcodec-native` is built from source here.
-Outside the platforms with native wheels (for example Intel macOS), the `native`
-extra requests it explicitly. Releases up to 0.2.0 were a single package, built
-from source with `--no-binary tensorcodec`.
+`tensorcodec` is pure Python; only `tensorcodec-native` is built from source here,
+and naming it explicitly also covers platforms without native wheels (for example
+Intel macOS), where `tensorcodec` does not depend on it. Releases up to 0.2.0 were
+a single package, built from source with `--no-binary tensorcodec`.
 
 The version/build constraint avoids silently selecting an incompatible FFmpeg
 major. `FFMPEG_DIR` tells the source build where to find headers and libraries;

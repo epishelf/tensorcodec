@@ -12,7 +12,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def native_requirements(project):
-    groups = [project["dependencies"], *project["optional-dependencies"].values()]
+    groups = [project["dependencies"], *project.get("optional-dependencies", {}).values()]
     requirements = [Requirement(item) for group in groups for item in group]
     return [r for r in requirements if r.name == "tensorcodec-native"]
 
@@ -25,9 +25,10 @@ def test_versions_are_locked():
     assert [p["version"] for p in lock if p["name"] == "tensorcodec-native"] == [cargo]
     init = re.search(r'^__version__ = "(.+)"$', (ROOT / "src/tensorcodec/__init__.py").read_text(), re.MULTILINE)[1]
     assert cargo == init == version
-    pins = native_requirements(project)
-    assert len(pins) == 2
-    assert all(str(r.specifier) == f"=={version}" for r in pins)
+    # Only the marked dependency: an extra would just trigger the same source build elsewhere.
+    (pin,) = native_requirements(project)
+    assert str(pin.specifier) == f"=={version}"
+    assert pin.marker is not None
 
 
 def test_native_license_matches_project_license():
@@ -48,7 +49,7 @@ def test_native_license_matches_project_license():
 )
 def test_native_marker_matches_published_wheels(environment, expected):
     project = tomllib.loads((ROOT / "pyproject.toml").read_text())["project"]
-    (default,) = [r for r in native_requirements(project) if r.marker is not None]
+    (default,) = native_requirements(project)
     # packaging 22-25 (vendored by pip) raise on version comparisons with releases like "6.8.0-azure".
     assert "platform_release" not in str(default.marker)
     base = default_environment() | {"platform_python_implementation": "CPython"}

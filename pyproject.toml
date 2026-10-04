@@ -24,8 +24,6 @@ classifiers = [
 
 [project.optional-dependencies]
 images = ["opencv-python-headless>=4.12"]
-# Unconditional, for platforms outside the marker with a source-built tensorcodec-native.
-native = ["tensorcodec-native==0.3.0"]
 
 [project.urls]
 Repository = "https://github.com/MilkClouds/tensorcodec"
