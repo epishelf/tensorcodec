@@ -1,6 +1,6 @@
 # Package size policy
 
-TensorCodec keeps its NumPy-only Python dependency set and bundles a minimal
+TensorCodec keeps its Python dependencies to NumPy and OpenCV and bundles a minimal
 FFmpeg/OpenSSL runtime in its default Linux `tensorcodec-av` wheels. Size limits prevent additions
 from silently increasing the distributed binary footprint.
 
@@ -14,7 +14,7 @@ from silently increasing the distributed binary footprint.
 The sole policy file is [`packaging/size-policy.json`](../packaging/size-policy.json).
 The checker uses only Python's standard library and never extracts the archive.
 Unpacked size excludes filesystem allocation overhead. Both metrics exclude NumPy,
-Python, package caches and other external dependencies; they are not total
+OpenCV, Python, package caches and other external dependencies; they are not total
 installation sizes. Reports and the README use MiB (2^20 bytes).
 
 Check final, repaired wheels locally:

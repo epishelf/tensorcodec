@@ -26,7 +26,7 @@ Video, audio and image codecs with TorchCodec-style APIs and NumPy arrays.
   in a single native call, avoiding per-frame Python calls. Closing a decoder
   releases its FFmpeg resources without waiting for Python's cyclic GC.
 - **Lightweight installation.** Linux wheels are 10.9–11.1 MiB (v0.2.0), including
-  FFmpeg shared libraries. NumPy is the only required Python dependency.
+  FFmpeg shared libraries. NumPy and OpenCV (headless) are the only required Python dependencies.
 
 ## Quick start
 
@@ -162,7 +162,7 @@ See the [compatibility contract](docs/compatibility.md) and
   These are `tensorcodec-av` wheels, installed automatically with `tensorcodec` (pure Python).
   Elsewhere only image codecs work; to build video/audio from source, install
   `tensorcodec-av==<same version>` ([external FFmpeg](docs/system_ffmpeg.md)). musl and
-  free-threaded CPython cannot be told apart by markers, so there use `pip install --no-deps tensorcodec numpy`.
+  free-threaded CPython cannot be told apart by markers, so there use `pip install --no-deps tensorcodec numpy opencv-python-headless`.
 - **Exact seeking:** scans packet timestamps when opening the decoder. Incorrect
   container keyframe flags can produce corrupt frames; repaired input or corrected
   frame mappings are needed in that case.
