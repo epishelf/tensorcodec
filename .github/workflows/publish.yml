@@ -12,116 +12,37 @@ concurrency:
   group: pypi-publish
   cancel-in-progress: false
 jobs:
-  macos:
-    uses: ./.github/workflows/macos-wheels.yml
-  pure-python:
-    uses: ./.github/workflows/pure-python-wheel.yml
-  build:
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - runner: ubuntu-24.04
-            target: x86_64
-          - runner: ubuntu-24.04-arm
-            target: aarch64
-    runs-on: ${{ matrix.runner }}
+  python:
+    uses: ./.github/workflows/build-python.yml
+  native:
+    needs: python
+    uses: ./.github/workflows/build-native.yml
+  check:
+    needs: [python, native]
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v10.2.0
+      - uses: actions/download-artifact@v8
         with:
-          python-version: '3.12'
-      - uses: actions/cache/restore@v6
-        id: native-cache
-        with:
-          path: .native-deps
-          key: manylinux2014-${{ matrix.target }}-${{ hashFiles('scripts/build_nasm.sh', 'scripts/build_openssl.sh', 'scripts/build_dav1d.sh', 'scripts/build_ffmpeg.sh') }}
-      - name: Build portable Linux wheel
-        uses: PyO3/maturin-action@v1
-        with:
-          target: ${{ matrix.target }}
-          manylinux: '2014'
-          command: build
-          args: -m native/Cargo.toml --release --locked --auditwheel repair --out dist
-          before-script-linux: |
-            /opt/python/cp310-cp310/bin/python -m pip install libclang==18.1.1
-            export LIBCLANG_PATH="$(/opt/python/cp310-cp310/bin/python -c 'from clang import cindex; print(cindex.Config.library_path)')"
-            export BINDGEN_EXTRA_CLANG_ARGS="-I$(gcc -print-file-name=include)"
-            prefix="$PWD/.native-deps"
-            export PKG_CONFIG_PATH="$prefix/openssl/lib/pkgconfig"
-            export LD_LIBRARY_PATH="$prefix/openssl/lib:$prefix/ffmpeg/lib"
-            if [ ! -f "$prefix/ready" ]; then
-              yum install -y perl-core
-              /opt/python/cp310-cp310/bin/python -m pip install meson==1.12.1 ninja==1.13.2
-              export PATH="/opt/python/cp310-cp310/bin:$PATH"
-              if [ "$(uname -m)" = x86_64 ]; then
-                bash scripts/build_nasm.sh "$prefix/nasm"
-                export PATH="$prefix/nasm/bin:$PATH"
-              fi
-              bash scripts/build_openssl.sh "$prefix/openssl"
-              bash scripts/build_ffmpeg.sh "$prefix/ffmpeg"
-              touch "$prefix/ready"
-            fi
-            export FFMPEG_DIR="$prefix/ffmpeg"
-      - name: Check native cache completeness
-        if: always()
-        id: native-ready
+          pattern: dist-*
+          path: artifacts
+      - name: Check the release set
         run: |
-          if [ -f .native-deps/ready ]; then echo 'ready=true' >> "$GITHUB_OUTPUT"; fi
-      - uses: actions/cache/save@v6
-        if: always() && steps.native-ready.outputs.ready == 'true' && steps.native-cache.outputs.cache-hit != 'true'
-        with:
-          path: .native-deps
-          key: ${{ steps.native-cache.outputs.cache-primary-key }}
-      - name: Check final wheel size
-        run: uv run --no-project python scripts/check_wheel_size.py dist/*.whl --output reports/wheel-size.json
-      - uses: actions/upload-artifact@v7
-        if: always()
-        with:
-          name: wheel-size-${{ matrix.target }}
-          path: reports/wheel-size.json
-          if-no-files-found: warn
-      - name: Build tensorcodec-native source distribution
-        if: matrix.target == 'x86_64'
-        run: uvx --from 'maturin>=1.8,<2' maturin sdist -m native/Cargo.toml --out dist
-      - name: Build tensorcodec wheel for validation
-        run: uv build --wheel --out-dir pure-dist
-      - name: Install validation tools and wheel
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y ffmpeg
-          uv venv
-          uv pip install pytest numpy twine 'opencv-python-headless>=4.12' 'Pillow>=11.3' dist/*.whl pure-dist/*.whl
-      - name: Generate baseline runtime fixtures
-        run: uv run --no-sync python scripts/check_wheel_runtime.py generate .runtime-fixtures
-      - name: Test on glibc 2.17 with Python 3.10 and 3.13
-        run: |
-          docker run --rm -v "$PWD:/io:ro" quay.io/pypa/manylinux2014_${{ matrix.target }} bash -euxc '
-            for abi in cp310-cp310 cp313-cp313; do
-              python="/opt/python/$abi/bin/python"
-              "$python" -m venv "/tmp/$abi"
-              runtime="/tmp/$abi/bin/python"
-              if [ "$abi" = cp310-cp310 ]; then "$runtime" -m pip install --only-binary=:all: numpy==1.26.4; fi
-              "$runtime" -m pip install --only-binary=:all: /io/dist/*.whl /io/pure-dist/*.whl
-              env -u LD_LIBRARY_PATH "$runtime" /io/scripts/check_wheel_runtime.py check /io/.runtime-fixtures
-            done
-          '
-      - name: Install pinned reference
-        run: uv pip install torch==2.14.1 torchcodec==0.17.0 --index-url https://download.pytorch.org/whl/cpu
-      - name: Use bundled FFmpeg for the reference
-        run: uv run --no-sync python scripts/configure_oracle_ffmpeg.py
-      - name: Validate distribution and playback
-        run: |
-          uv run --no-sync python -m twine check dist/*
-          uv run --no-sync pytest tests/test_video_contract.py tests/test_audio_contract.py --backend torchcodec
-          uv run --no-sync pytest --compare
-      - uses: actions/upload-artifact@v7
-        with:
-          name: pypi-distributions-native-${{ matrix.target }}
-          path: dist/*
-          if-no-files-found: error
+          python3 - <<'EOF'
+          import pathlib, re
+          files = sorted(p for p in pathlib.Path("artifacts").rglob("*") if p.is_file())
+          names = [f.name for f in files]
+          print("\n".join(names))
+          versions = {re.match(r"tensorcodec(?:_native)?-([^-]+?)(?:\.tar\.gz|-)", n)[1] for n in names}
+          assert len(versions) == 1, f"mixed versions: {versions}"
+          expected = ["tensorcodec-*-py3-none-any.whl", "tensorcodec-*.tar.gz", "tensorcodec_native-*.tar.gz",
+                      "tensorcodec_native-*manylinux*x86_64.whl", "tensorcodec_native-*manylinux*aarch64.whl",
+                      "tensorcodec_native-*macosx*arm64.whl"]
+          for pattern in expected:
+              assert len([f for f in files if f.match(pattern)]) == 1, pattern
+          assert len(files) == len(expected), names
+          EOF
   publish:
-    needs: [build, macos, pure-python]
+    needs: check
     if: inputs.publish
     runs-on: ubuntu-24.04
     environment:
@@ -133,13 +54,13 @@ jobs:
     steps:
       - uses: actions/download-artifact@v8
         with:
-          pattern: pypi-distributions-native-*
+          pattern: dist-native-*
           merge-multiple: true
           path: native-dist
       - uses: actions/download-artifact@v8
         with:
-          name: pypi-distributions-pure
-          path: pure-dist
+          name: dist-python
+          path: python-dist
       # Native first: tensorcodec pins tensorcodec-native exactly, so it must not appear before its pin exists.
       - name: Publish tensorcodec-native
         uses: pypa/gh-action-pypi-publish@release/v1
@@ -148,7 +69,7 @@ jobs:
       - name: Publish tensorcodec
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
-          packages-dir: pure-dist/
+          packages-dir: python-dist/
   update-size-docs:
     needs: publish
     if: github.ref == 'refs/heads/main'

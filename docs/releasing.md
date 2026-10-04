@@ -9,9 +9,8 @@ commit and version:
 | `tensorcodec-native` | Rust/FFmpeg extension (import `tensorcodec_native`) | maturin (`native/`) | platform wheels, sdist |
 
 `tensorcodec` requires `tensorcodec-native==<its own version>` behind an environment
-marker matching the native wheel tags, and the `native` extra requests it
-unconditionally. `tests/test_versions.py` fails CI unless `pyproject.toml`,
-`native/Cargo.toml` (the native version source), both pins and
+marker matching the native wheel tags. `tests/test_versions.py` fails CI unless
+`pyproject.toml`, `native/Cargo.toml` (the native version source), `native/Cargo.lock`, the pin and
 `tensorcodec.__version__` agree. At runtime `VideoDecoder`/`AudioDecoder` reject a
 `tensorcodec-native` whose version differs.
 
@@ -23,8 +22,8 @@ runtime. Windows wheels are not provided; there, `tensorcodec` provides image
 codecs only. Bundled-library notices ship only with `tensorcodec-native`
 (`native/licenses/`).
 
-To release, set the new version in `pyproject.toml` (project version and both
-`tensorcodec-native` pins), `native/Cargo.toml` (then `cargo update -p
+To release, set the new version in `pyproject.toml` (project version and the
+`tensorcodec-native` pin), `native/Cargo.toml` (then `cargo update -p
 tensorcodec-native --manifest-path native/Cargo.toml` to refresh the lock file)
 and `src/tensorcodec/__init__.py`.
 
@@ -46,29 +45,44 @@ with the same fields. Manage this configuration in each project's PyPI Publishin
 or renaming the repository or workflow. Publishing uses GitHub OIDC; no API token
 is needed. Repository visibility does not need to change for a release.
 
+## Workflows
+
+Each distribution has one reusable workflow; CI and the release call both.
+
+| Workflow | Jobs | Artifacts |
+| --- | --- | --- |
+| `build-python.yml` | `build`: `tensorcodec` wheel and sdist (`python -m build`, `twine check --strict`); `test-without-native`: installs it on Windows and Intel macOS without `tensorcodec-native` and runs the image tests (OpenCV 5 and the 4.12 lower bound) | `dist-python` |
+| `build-native.yml` | `linux` (x86_64, aarch64: manylinux2014 via maturin-action), `macos` (arm64), `sdist`; each wheel job validates with the `dist-python` wheel, so callers run `build-python.yml` first | `dist-native-linux-{x86_64,aarch64}`, `dist-native-macos-arm64`, `dist-native-sdist`, `wheel-size-linux-*` |
+| `ci.yml` | `python`, `native`, plus `test` (development build against conda-forge FFmpeg, Clippy, oracle comparison) | — |
+| `publish.yml` | `python`, `native`, `check` (one version, exactly the six expected files), `publish`, `update-size-docs` | — |
+
+`ci.yml` runs `native` on every push, including `main`, and on pull requests that
+touch `native/`, `scripts/`, `tests/`, workflows or `pyproject.toml`; a release
+commit has therefore already passed the same native builds and validation.
+
 ## Release
 
-Run the **Publish to PyPI** workflow on `main`. It builds the portable Linux/macOS
-`tensorcodec-native` wheels and sdist plus the `tensorcodec` wheel and sdist, checks package metadata, validates the pinned oracle
-and compares playback before uploading through PyPI Trusted Publishing. It uses
-the existing GitHub `pypi` environment. `tensorcodec-native` is uploaded first, so the
-exact pin in `tensorcodec` never points at a missing release; if the second upload
-fails, rerun only it (`twine upload` of the `pypi-distributions-pure` artifact) rather
-than the whole workflow. Publication fails if authorization is missing, tests fail,
-or the version has already been uploaded.
+Run the **Publish to PyPI** workflow on `main`. It runs both build workflows, checks the
+release set and uploads through PyPI Trusted Publishing using the existing GitHub
+`pypi` environment. `tensorcodec-native` is uploaded first, so the exact pin in
+`tensorcodec` never points at a missing release; if the second upload fails, upload
+the `dist-python` artifact with `twine upload` rather than rerunning the whole
+workflow. Publication fails if authorization is missing, tests fail, or the version
+has already been uploaded.
 
 ```sh
 gh workflow run publish.yml --repo epishelf/tensorcodec --ref main
 ```
 
-For a build and full validation without uploading, pass `--field publish=false`.
+For a build and full validation without uploading, pass `--field publish=false`;
+the run's `dist-*` artifacts are then the release candidates.
 
 Check the workflow, https://pypi.org/project/tensorcodec/ and
 https://pypi.org/project/tensorcodec-native/ before reporting success. Verify a fresh
 `uv pip install tensorcodec==<version>` pulls the matching `tensorcodec-native` and
 decodes video without Torch/PyAV on both Linux architectures and macOS arm64, and
-that it installs without `tensorcodec-native` on Windows. Update the version before subsequent releases;
-PyPI versions cannot be overwritten.
+that it installs without `tensorcodec-native` on Windows. Update the version before
+subsequent releases; PyPI versions cannot be overwritten.
 
 The local Linux build is reproducible using `scripts/build_linux_wheel.sh` inside
 `quay.io/pypa/manylinux2014_x86_64` or
@@ -76,31 +90,28 @@ The local Linux build is reproducible using `scripts/build_linux_wheel.sh` insid
 Both native source archives are version- and checksum-pinned. Their licensing
 and source links are recorded in `native/licenses/README.md`.
 
-## CI versus release builds
+## Development versus release builds
 
-- Ordinary CI uses prebuilt conda-forge FFmpeg 7.1.1 through Pixi, including its
+- The `test` job uses prebuilt conda-forge FFmpeg 7.1.1 through Pixi, including its
   headers and shared libraries. It builds only the `tensorcodec-native` extension
   and installs `tensorcodec` from the checkout.
-- The `tensorcodec` wheel is built once with `python -m build` and checked with
-  `twine check --strict`; Windows and Intel macOS jobs install it without
-  `tensorcodec-native` and run the image tests (one with OpenCV 5, one with 4.x).
-- PyPI wheels use the smaller LGPL FFmpeg 7.1.5 build plus OpenSSL 3.5.9.
-  Their native prefix is cached by architecture, glibc baseline and build-script
-  checksums. This preserves the wheel's codec set, dependency size and licensing rather than bundling the full
-  conda-forge dependency graph.
-- Release validation installs each repaired `tensorcodec-native` wheel together with
-  the `tensorcodec` wheel on glibc 2.17 with Python 3.10
-  and 3.13 and decodes video/audio without Torch, PyAV or a system FFmpeg. Python
-  3.10 also checks the minimum NumPy line (1.26.4). Native
-  x86_64 and ARM64 runners also run the full pinned playback oracle comparison.
-- Release validation still tests the installed repaired wheel. The fixture CLI
-  can be FFmpeg 6 or 7; fixtures explicitly remove auxiliary sentinel packets.
+- Release wheels (`build-native.yml`) use the smaller LGPL FFmpeg 7.1.5 build plus
+  OpenSSL 3.5.9. Their native prefix is cached by architecture, glibc baseline and
+  build-script checksums. This preserves the wheel's codec set, dependency size and
+  licensing rather than bundling the full conda-forge dependency graph.
+- Each repaired Linux wheel is installed with the `tensorcodec` wheel on glibc 2.17
+  with Python 3.10 and 3.13 and decodes video/audio without Torch, PyAV or a system
+  FFmpeg. Python 3.10 also checks the minimum NumPy line (1.26.4). The x86_64 and
+  ARM64 runners also run the full pinned playback oracle comparison; the macOS job
+  runs the test suite and clean Python 3.10/3.13 environments.
+- The fixture CLI can be FFmpeg 6 or 7; fixtures explicitly remove auxiliary
+  sentinel packets.
 
 ## Size checks and published comparison
 
 Final repaired `tensorcodec-native` wheels must stay within 15 MiB download and 35 MiB unpacked per
-architecture. The build job checks `packaging/size-policy.json` and uploads a
-separate `wheel-size-*` report, including differences from the last published
+architecture. The `linux` job checks `packaging/size-policy.json` and uploads a
+separate `wheel-size-linux-*` report, including differences from the last published
 baseline. Size reports must not be placed in `dist/`.
 
 After a successful publication, the `update-size-docs` job measures hash-verified

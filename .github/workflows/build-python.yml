@@ -1,4 +1,6 @@
-name: tensorcodec distributions
+# Builds the pure-Python tensorcodec wheel and sdist (artifact dist-python) and tests image codecs
+# on platforms that get no tensorcodec-native.
+name: Build tensorcodec
 on:
   workflow_call:
 permissions:
@@ -24,11 +26,10 @@ jobs:
           EOF
       - uses: actions/upload-artifact@v7
         with:
-          name: pypi-distributions-pure
+          name: dist-python
           path: dist/*
           if-no-files-found: error
-  # Platforms without tensorcodec-native wheels: the marker skips it and image codecs still work.
-  test:
+  test-without-native:
     needs: build
     strategy:
       fail-fast: false
@@ -51,7 +52,7 @@ jobs:
           python-version: ${{ matrix.python }}
       - uses: actions/download-artifact@v8
         with:
-          name: pypi-distributions-pure
+          name: dist-python
           path: dist
       # Fixtures need libaom; Homebrew's FFmpeg lacks it, so use conda-forge's like the other jobs.
       - uses: prefix-dev/setup-pixi@v0.10.2

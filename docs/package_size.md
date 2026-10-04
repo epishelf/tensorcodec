@@ -25,10 +25,10 @@ uv run --no-project python scripts/check_wheel_size.py dist/*.whl --output repor
 ```
 
 Each architecture is checked independently. Exactly reaching a limit passes;
-exceeding either limit fails. The release workflow runs this after `auditwheel
-repair`, before uploading distributions. JSON reports are separate artifacts, not
-files in `dist/`. Actions summaries include changes from the committed published
-baseline. Ordinary CI tests the checker without building FFmpeg from source.
+exceeding either limit fails. The `linux` job of `build-native.yml` runs this after
+`auditwheel repair`, in CI and before every upload. JSON reports are separate
+artifacts, not files in `dist/`. Actions summaries include changes from the
+committed published baseline. The `test` job also unit-tests the checker.
 
 Before changing a limit, explain the feature, the measured byte increase on both
 architectures and why a smaller configuration would not provide the same behavior.
