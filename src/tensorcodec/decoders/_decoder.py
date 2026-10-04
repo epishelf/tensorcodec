@@ -13,8 +13,19 @@ import numpy as np
 
 from tensorcodec._frame import AudioSamples, Frame, FrameBatch
 from tensorcodec._metadata import AudioStreamMetadata, VideoStreamMetadata
-from tensorcodec._native import Decoder as NativeDecoder
 from tensorcodec.transforms import _pipeline
+
+
+def _native_decoder(*args):
+    try:
+        from tensorcodec._native import Decoder
+    except ImportError as error:
+        raise ImportError(
+            "VideoDecoder and AudioDecoder require TensorCodec's native extension, which could not be loaded. "
+            "Native wheels cover Linux x86_64/aarch64 (glibc 2.17+) and macOS 14+ arm64; elsewhere the "
+            "pure-Python wheel provides only the image codecs."
+        ) from error
+    return Decoder(*args)
 
 
 def _source(source):
@@ -125,7 +136,7 @@ class VideoDecoder(_Decoder):
         self._seek_mode = seek_mode
         self._lock = RLock()
         self._closed = False
-        self._native = NativeDecoder(_source(source), "video", stream_index, int(num_ffmpeg_threads))
+        self._native = _native_decoder(_source(source), "video", stream_index, int(num_ffmpeg_threads))
         try:
             header = self._native.metadata(apply_rotation=output_format != "native")
             self.stream_index = header["stream_index"]
@@ -424,7 +435,7 @@ class AudioDecoder(_Decoder):
                 raise ValueError(f"{name} must be a positive integer")
         self._lock = RLock()
         self._closed = False
-        self._native = NativeDecoder(_source(source), "audio", stream_index)
+        self._native = _native_decoder(_source(source), "audio", stream_index)
         try:
             header = self._native.metadata()
             header.pop("time_base_num")

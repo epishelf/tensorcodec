@@ -5,7 +5,9 @@ Binary wheels target Linux x86_64 and ARM64 (aarch64), glibc 2.17+, CPython 3.10
 NumPy must also provide a compatible wheel for the selected Python/glibc pair.
 The wheel bundles shared FFmpeg 7.1.5 and OpenSSL 3.5.9 LTS; its only Python
 runtime dependency is NumPy. macOS 14+ ARM64 wheels bundle the same minimal
-runtime. Windows wheels are not provided.
+runtime. Windows wheels are not provided. A pure-Python `py3-none-any` wheel,
+built by `scripts/build_pure_wheel.py` with the same metadata, covers every other
+platform with image codecs only; installers prefer a matching native wheel.
 
 ## Trusted publisher configuration
 
@@ -25,8 +27,8 @@ is needed. Repository visibility does not need to change for a release.
 
 ## Release
 
-Run the **Publish to PyPI** workflow on `main`. It builds the portable Linux/macOS wheels
-and source distribution, checks package metadata, validates the pinned oracle
+Run the **Publish to PyPI** workflow on `main`. It builds the portable Linux/macOS wheels,
+the pure-Python wheel and source distribution, checks package metadata, validates the pinned oracle
 and compares playback before uploading through PyPI Trusted Publishing. It uses
 the existing GitHub `pypi` environment. Publication fails if authorization is
 missing, tests fail, or the version has already been uploaded.

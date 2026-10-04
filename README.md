@@ -158,8 +158,9 @@ See the [compatibility contract](docs/compatibility.md) and
 
 - **Wheels:** Linux x86_64 and ARM64 (aarch64), glibc 2.17+, CPython 3.10+.
   NumPy must also provide a compatible wheel; newer Python versions may require
-  a newer glibc. macOS 14+ wheels support Apple Silicon (Intel Macs: through 0.1.5). Windows, musl/Alpine
-  and free-threaded Python wheels are not provided.
+  a newer glibc. macOS 14+ wheels support Apple Silicon (Intel Macs: through 0.1.5). Elsewhere
+  (Windows, Intel macOS, musl/Alpine, free-threaded Python) installers select a pure-Python wheel:
+  image codecs work, while `VideoDecoder`/`AudioDecoder` raise `ImportError` when constructed.
 - **Exact seeking:** scans packet timestamps when opening the decoder. Incorrect
   container keyframe flags can produce corrupt frames; repaired input or corrected
   frame mappings are needed in that case.

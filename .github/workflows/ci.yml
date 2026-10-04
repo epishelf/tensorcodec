@@ -12,6 +12,8 @@ concurrency:
 jobs:
   macos:
     uses: ./.github/workflows/macos-wheels.yml
+  pure-python:
+    uses: ./.github/workflows/pure-python-wheel.yml
   test:
     runs-on: ubuntu-24.04
     steps:
