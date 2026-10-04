@@ -4,48 +4,45 @@ version = "0.2.0"
 description = "Video, audio and image codecs with TorchCodec-style APIs and NumPy arrays"
 readme = "README.md"
 license = "Apache-2.0"
-license-files = ["LICENSE", "licenses/*"]
+license-files = ["LICENSE"]
 authors = [{ name = "Suhwan Choi", email = "milkclouds00@gmail.com" }]
 requires-python = ">=3.10"
-dependencies = ["numpy>=1.26"]
+# tensorcodec-native is pinned to this exact version. The marker matches its wheel tags (CPython abi3:
+# manylinux x86_64/aarch64, macOS 14+ arm64 = Darwin 23+); elsewhere only the image codecs work.
+dependencies = [
+    "numpy>=1.26",
+    "tensorcodec-native==0.2.0; platform_python_implementation == 'CPython' and ((sys_platform == 'linux' and (platform_machine == 'x86_64' or platform_machine == 'aarch64')) or (sys_platform == 'darwin' and platform_machine == 'arm64' and platform_release >= '23'))",
+]
 classifiers = [
     "Development Status :: 3 - Alpha",
-    "Operating System :: POSIX :: Linux",
-    "Operating System :: MacOS :: MacOS X",
+    "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Rust",
+    "Topic :: Multimedia :: Graphics",
     "Topic :: Multimedia :: Video",
 ]
 
 [project.optional-dependencies]
-images = ["opencv-python-headless>=4.13,<5"]
+images = ["opencv-python-headless>=4.12"]
+# Unconditional, for platforms outside the marker with a source-built tensorcodec-native.
+native = ["tensorcodec-native==0.2.0"]
 
 [project.urls]
 Repository = "https://github.com/MilkClouds/tensorcodec"
 Issues = "https://github.com/MilkClouds/tensorcodec/issues"
 
 [dependency-groups]
-dev = ["pytest>=8", "ruff>=0.9", "maturin>=1.8,<2", "opencv-python-headless>=4.13,<5", "Pillow>=11.3"]
+dev = ["pytest>=8", "ruff>=0.9", "maturin>=1.8,<2", "opencv-python-headless>=4.12", "Pillow>=11.3"]
 oracle = ["torch==2.14.1", "torchcodec==0.17.0"]
 
 [build-system]
-requires = ["maturin>=1.8,<2"]
-build-backend = "maturin"
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
 
-[tool.maturin]
-manifest-path = "native/Cargo.toml"
-python-source = "src"
-module-name = "tensorcodec._native"
-features = ["pyo3/extension-module"]
-include = [
-    { path = "scripts/*.sh", format = "sdist" },
-    { path = "scripts/*.py", format = "sdist" },
-    { path = "docs/*.md", format = "sdist" },
-    { path = "packaging/*.json", format = "sdist" },
-    { path = "tests/**/*.py", format = "sdist" },
-    { path = "benchmarks/**/*.py", format = "sdist" },
-    { path = "benchmarks/*.md", format = "sdist" },
-]
+[tool.hatch.build.targets.wheel]
+packages = ["src/tensorcodec"]
+
+[tool.hatch.build.targets.sdist]
+only-include = ["src", "tests", "docs", "scripts", "benchmarks", "packaging", "README.md", "LICENSE"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -55,6 +52,7 @@ line-length = 119
 target-version = "py310"
 
 [tool.uv.sources]
+tensorcodec-native = { path = "native", editable = true }
 torch = { index = "pytorch-cpu" }
 torchcodec = { index = "pytorch-cpu" }
 

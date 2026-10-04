@@ -1,7 +1,8 @@
 # Package size policy
 
 TensorCodec keeps its NumPy-only Python dependency set and bundles a minimal
-FFmpeg/OpenSSL runtime in its default Linux wheels. Size limits prevent additions
+FFmpeg/OpenSSL runtime in its default Linux `tensorcodec-native` wheels (the pure-Python
+`tensorcodec` wheel adds about 30 KiB and is not size-checked). Size limits prevent additions
 from silently increasing the distributed binary footprint.
 
 ## What is measured

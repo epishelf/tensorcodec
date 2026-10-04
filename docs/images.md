@@ -20,16 +20,21 @@ encoded = JpegEncoder(rgb).to_tensor(quality=90)  # 1-D uint8 NumPy array
 
 ## Installation
 
-The current image backend uses OpenCV 4.13+. An existing compatible `cv2`
-installation is sufficient; otherwise the `images` extra installs
-`opencv-python-headless`. Use only one OpenCV wheel variant per environment.
+The image backend uses OpenCV 4.12 or newer, including 5.x. An existing compatible
+`cv2` installation is sufficient; otherwise the `images` extra installs
+`opencv-python-headless`. The bound is measured: the image test suite, including
+the TorchCodec comparisons, passes with `opencv-python-headless` 4.12.0.88,
+4.13.0.92 and 5.0.0.93. With 4.10 and 4.11 everything except GIF and AVIF passes:
+4.12 is the first release whose PyPI wheels build both decoders (OpenCV added GIF
+in 4.11, but its wheels report `GIF: NO` and `AVIF: NO`). The 4.8 and 4.9 wheels
+do not import with NumPy 2. Use only one OpenCV wheel variant per environment.
 NumPy is the only required dependency for the base package. Image dependencies
 are separate from the base wheel size. Pillow is used only in tests.
 
-Image codecs do not use the native extension. Platforms without a native wheel
-(Windows, Intel macOS, musl, free-threaded Python) install the pure-Python
-`py3-none-any` wheel, which provides the full image API; constructing
-`VideoDecoder` or `AudioDecoder` there raises `ImportError`.
+Image codecs are pure Python and do not need `tensorcodec-native`, so they work
+on every platform, including Windows and Intel macOS where `pip install
+tensorcodec` installs no native package; constructing `VideoDecoder` or
+`AudioDecoder` there raises `ImportError`.
 
 ## Contract and limits
 

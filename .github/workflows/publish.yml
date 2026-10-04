@@ -42,7 +42,7 @@ jobs:
           target: ${{ matrix.target }}
           manylinux: '2014'
           command: build
-          args: --release --locked --auditwheel repair --out dist
+          args: -m native/Cargo.toml --release --locked --auditwheel repair --out dist
           before-script-linux: |
             /opt/python/cp310-cp310/bin/python -m pip install libclang==18.1.1
             export LIBCLANG_PATH="$(/opt/python/cp310-cp310/bin/python -c 'from clang import cindex; print(cindex.Config.library_path)')"
@@ -81,15 +81,17 @@ jobs:
           name: wheel-size-${{ matrix.target }}
           path: reports/wheel-size.json
           if-no-files-found: warn
-      - name: Build source distribution
+      - name: Build tensorcodec-native source distribution
         if: matrix.target == 'x86_64'
-        run: uvx --from 'maturin>=1.8,<2' maturin sdist --out dist
+        run: uvx --from 'maturin>=1.8,<2' maturin sdist -m native/Cargo.toml --out dist
+      - name: Build tensorcodec wheel for validation
+        run: uv build --wheel --out-dir pure-dist
       - name: Install validation tools and wheel
         run: |
           sudo apt-get update
           sudo apt-get install -y ffmpeg
           uv venv
-          uv pip install pytest numpy twine 'opencv-python-headless>=4.13,<5' 'Pillow>=11.3' dist/*.whl
+          uv pip install pytest numpy twine 'opencv-python-headless>=4.12' 'Pillow>=11.3' dist/*.whl pure-dist/*.whl
       - name: Generate baseline runtime fixtures
         run: uv run --no-sync python scripts/check_wheel_runtime.py generate .runtime-fixtures
       - name: Test on glibc 2.17 with Python 3.10 and 3.13
@@ -100,7 +102,7 @@ jobs:
               "$python" -m venv "/tmp/$abi"
               runtime="/tmp/$abi/bin/python"
               if [ "$abi" = cp310-cp310 ]; then "$runtime" -m pip install --only-binary=:all: numpy==1.26.4; fi
-              "$runtime" -m pip install --only-binary=:all: /io/dist/*.whl
+              "$runtime" -m pip install --only-binary=:all: /io/dist/*.whl /io/pure-dist/*.whl
               env -u LD_LIBRARY_PATH "$runtime" /io/scripts/check_wheel_runtime.py check /io/.runtime-fixtures
             done
           '
@@ -115,7 +117,7 @@ jobs:
           uv run --no-sync pytest --compare
       - uses: actions/upload-artifact@v7
         with:
-          name: pypi-distributions-${{ matrix.target }}
+          name: pypi-distributions-native-${{ matrix.target }}
           path: dist/*
           if-no-files-found: error
   publish:
@@ -131,10 +133,22 @@ jobs:
     steps:
       - uses: actions/download-artifact@v8
         with:
-          pattern: pypi-distributions-*
+          pattern: pypi-distributions-native-*
           merge-multiple: true
-          path: dist
-      - uses: pypa/gh-action-pypi-publish@release/v1
+          path: native-dist
+      - uses: actions/download-artifact@v8
+        with:
+          name: pypi-distributions-pure
+          path: pure-dist
+      # Native first: tensorcodec pins tensorcodec-native exactly, so it must not appear before its pin exists.
+      - name: Publish tensorcodec-native
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: native-dist/
+      - name: Publish tensorcodec
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: pure-dist/
   update-size-docs:
     needs: publish
     if: github.ref == 'refs/heads/main'

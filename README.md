@@ -158,9 +158,12 @@ See the [compatibility contract](docs/compatibility.md) and
 
 - **Wheels:** Linux x86_64 and ARM64 (aarch64), glibc 2.17+, CPython 3.10+.
   NumPy must also provide a compatible wheel; newer Python versions may require
-  a newer glibc. macOS 14+ wheels support Apple Silicon (Intel Macs: through 0.1.5). Elsewhere
-  (Windows, Intel macOS, musl/Alpine, free-threaded Python) installers select a pure-Python wheel:
-  image codecs work, while `VideoDecoder`/`AudioDecoder` raise `ImportError` when constructed.
+  a newer glibc. macOS 14+ wheels support Apple Silicon (Intel Macs: through 0.1.5).
+  `tensorcodec` itself is pure Python; video/audio decoding lives in `tensorcodec-native`, pinned to
+  the same version and installed automatically on those platforms (CPython only). Elsewhere, e.g.
+  Windows and Intel macOS, image codecs work and `VideoDecoder`/`AudioDecoder` raise `ImportError`.
+  Environment markers cannot detect musl or free-threaded CPython on Linux x86_64/aarch64, so
+  installers there still try `tensorcodec-native` (no wheel; its sdist needs FFmpeg 7 and Rust).
 - **Exact seeking:** scans packet timestamps when opening the decoder. Incorrect
   container keyframe flags can produce corrupt frames; repaired input or corrected
   frame mappings are needed in that case.
@@ -176,7 +179,7 @@ See [container behavior](docs/container_robustness.md) for seek limitations and
 <details>
 <summary>Build from source and run tests</summary>
 
-Source builds require Rust 1.88+, Clang/libclang, pkg-config and FFmpeg 7 development
+`uv sync` builds `native/` (the `tensorcodec-native` package) in place. Its source builds require Rust 1.88+, Clang/libclang, pkg-config and FFmpeg 7 development
 headers/libraries. Python handles API and playback selection; Rust + PyO3 handles
 FFmpeg. Native decoding releases the GIL, allowing separate decoder instances to
 run concurrently across Python threads. Calls on the same instance are serialized.
@@ -189,14 +192,14 @@ uv sync --group dev --group oracle
 uv run --group oracle pytest tests/test_video_contract.py tests/test_audio_contract.py --backend torchcodec
 uv run --group oracle pytest --compare
 
-# Rebuild after changing Rust code.
-uv run --group oracle maturin develop --locked --uv
+# Rebuild tensorcodec-native after changing Rust code.
+uv run --group oracle maturin develop -m native/Cargo.toml --locked --uv
 ```
 
 Tests generate media with FFmpeg/ffprobe and Python's `wave` module.
 `--compare` requires the pinned oracle; differential tests otherwise skip.
 
-[Playback rules](docs/playback_semantics.md) · [Release guide](docs/releasing.md) · [Dependency licenses](licenses/README.md)
+[Playback rules](docs/playback_semantics.md) · [Release guide](docs/releasing.md) · [Dependency licenses](native/licenses/README.md)
 
 </details>
 

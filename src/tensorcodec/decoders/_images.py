@@ -271,7 +271,7 @@ def decode_image(source, *, mode="RGB", output_dtype=np.uint8):
     Sources are paths, bytes or 1-D uint8 arrays. Modes: UNCHANGED, GRAY,
     GRAY_ALPHA, RGB, RGB_ALPHA (case-insensitive strings or ImageReadMode).
     output_dtype is uint8, uint16 or 'auto'; integer conversion scales the range.
-    BMP is detected too. Requires optional OpenCV >= 4.13. HEIC and animated PNG
+    BMP is detected too. Requires optional OpenCV >= 4.12. HEIC and animated PNG
     are unsupported.
     """
     return _image(source, None, mode, output_dtype)

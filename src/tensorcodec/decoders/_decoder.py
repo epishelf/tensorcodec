@@ -18,14 +18,20 @@ from tensorcodec.transforms import _pipeline
 
 def _native_decoder(*args):
     try:
-        from tensorcodec._native import Decoder
+        from tensorcodec_native import _native
     except ImportError as error:
         raise ImportError(
-            "VideoDecoder and AudioDecoder require TensorCodec's native extension, which could not be loaded. "
-            "Native wheels cover Linux x86_64/aarch64 (glibc 2.17+) and macOS 14+ arm64; elsewhere the "
-            "pure-Python wheel provides only the image codecs."
+            "VideoDecoder and AudioDecoder require the tensorcodec-native package, which could not be imported. "
+            "pip installs it automatically on Linux x86_64/aarch64 (glibc 2.17+) and macOS 14+ arm64 with "
+            "CPython; elsewhere tensorcodec provides only the image codecs."
         ) from error
-    return Decoder(*args)
+    from tensorcodec import __version__
+
+    if _native.__version__ != __version__:
+        raise ImportError(
+            f"tensorcodec {__version__} requires tensorcodec-native=={__version__}, found {_native.__version__}"
+        )
+    return _native.Decoder(*args)
 
 
 def _source(source):

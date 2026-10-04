@@ -118,7 +118,7 @@ def main() -> None:
     reference = policy["comparison"]
     pyav = policy["pyav"]
     snapshot = {
-        "tensorcodec": measure_release("tensorcodec", args.version, "cp310"),
+        "tensorcodec": measure_release("tensorcodec-native", args.version, "cp310"),
         "torchcodec": measure_release(reference["project"], reference["version"], reference["python_tag"]),
         "pyav": measure_release(pyav["project"], pyav["version"], pyav["python_tag"]),
         "torch": measure_release(**policy["torch"]),

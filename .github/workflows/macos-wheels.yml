@@ -33,7 +33,7 @@ jobs:
         run: |
           brew install nasm pkg-config coreutils meson ninja
           uv venv
-          uv pip install numpy pytest 'opencv-python-headless>=4.13,<5' 'Pillow>=11.3' 'maturin>=1.8,<2' delocate twine
+          uv pip install numpy pytest 'opencv-python-headless>=4.12' 'Pillow>=11.3' 'maturin>=1.8,<2' delocate twine
           echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
           echo "LIBCLANG_PATH=$(xcode-select -p)/Toolchains/XcodeDefault.xctoolchain/usr/lib" >> "$GITHUB_ENV"
           echo "$HOME/.pixi/envs/ffmpeg/bin" >> "$GITHUB_PATH"
@@ -51,9 +51,11 @@ jobs:
           key: ${{ steps.native-cache.outputs.cache-primary-key }}
       - name: Hide build-time FFmpeg libraries
         run: mv .native-deps/macos .native-deps/macos-build-only
+      - name: Build tensorcodec wheel for validation
+        run: uv build --wheel --out-dir pure-dist
       - name: Validate installed wheel
         run: |
-          uv pip install dist/*.whl
+          uv pip install dist/*.whl pure-dist/*.whl
           python -m twine check dist/*
           pytest
           python scripts/check_wheel_runtime.py generate .runtime-fixtures
@@ -61,7 +63,7 @@ jobs:
         run: |
           for version in 3.10 3.13; do
             uv venv "/tmp/runtime-$version" --python "$version"
-            uv pip install --python "/tmp/runtime-$version/bin/python" dist/*.whl
+            uv pip install --python "/tmp/runtime-$version/bin/python" dist/*.whl pure-dist/*.whl
             "/tmp/runtime-$version/bin/python" scripts/check_wheel_runtime.py check .runtime-fixtures
           done
       - name: Restore build cache
@@ -72,6 +74,6 @@ jobs:
           fi
       - uses: actions/upload-artifact@v7
         with:
-          name: pypi-distributions-macos-${{ matrix.arch }}
+          name: pypi-distributions-native-macos-${{ matrix.arch }}
           path: dist/*.whl
           if-no-files-found: error
