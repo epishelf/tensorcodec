@@ -117,6 +117,13 @@ def test_image_sources_and_content_detection(backend, tmp_path, kind):
 @pytest.mark.parametrize("codec", ["jpeg", "webp", "gif", "avif"])
 def test_format_functions_and_dispatch(backend, encoded_images, codec):
     path = encoded_images / f"image.{codec}"
+    if codec == "avif" and not backend.__name__.startswith("torchcodec"):
+        import cv2
+
+        if not cv2.haveImageReader(str(path)):  # e.g. opencv-python-headless 4.14 on Windows
+            with pytest.raises(RuntimeError, match="codec build support"):
+                backend.decode_avif(path)
+            return
     direct = as_numpy(getattr(backend, f"decode_{codec}")(path))
     assert direct.shape == (3, 16, 24)
     assert direct.dtype == np.uint8

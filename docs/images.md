@@ -54,7 +54,8 @@ Image codecs do not use the native extension. Platforms without a native wheel
   RGB, as in Pillow, because their fourth byte is padding.
 - HEIC is unsupported. TIFF is not detected: OpenCV premultiplies unassociated
   alpha and drops gray+alpha samples, so lossless decoding cannot be promised.
-- Other formats depend on the installed OpenCV build. Missing dependencies,
+- Format support depends on the installed OpenCV build; for example, the
+  Windows `opencv-python-headless` 4.14 wheel has no AVIF decoder. Missing dependencies,
   unsupported codecs and decode failures raise; no alternate decoder is tried.
 - Encoders accept nonempty CHW uint8 arrays with 1 or 3 channels. Both provide
   `to_file`, `to_file_like` and `to_tensor`; JPEG quality is 1–100 (default 75),
