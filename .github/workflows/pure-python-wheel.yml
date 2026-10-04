@@ -48,11 +48,17 @@ jobs:
           path: dist
       # Fixtures need libaom; Homebrew's FFmpeg lacks it, so use conda-forge's like the other jobs.
       - uses: prefix-dev/setup-pixi@v0.10.2
+        env:
+          PIXI_HOME: ${{ runner.temp }}/pixi
         with:
           pixi-version: v0.81.0
           run-install: false
           global-environments: ffmpeg=7.1.1=gpl_*
           global-cache: true
+      - name: Put fixture FFmpeg on PATH
+        env:
+          FFMPEG_BIN: ${{ runner.temp }}/pixi/envs/ffmpeg/${{ runner.os == 'Windows' && 'Library/bin' || 'bin' }}
+        run: echo "$FFMPEG_BIN" >> "$GITHUB_PATH"
       - name: Check fixture FFmpeg
         run: ffmpeg -hide_banner -encoders | grep libaom-av1
       - name: Install wheel without a Rust toolchain
