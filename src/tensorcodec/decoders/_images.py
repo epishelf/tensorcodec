@@ -69,6 +69,8 @@ def _format(data):
             return "avif"
         if any(b in (b"heic", b"heix", b"heim", b"heis", b"hevc", b"hevx", b"mif1", b"msf1") for b in brands):
             return "heic"
+    if data.startswith(b"BM"):
+        return "bmp"
     raise ValueError("Unsupported or unrecognized image format")
 
 
@@ -92,6 +94,14 @@ def _png_channels(data):
     if channels is None:
         raise RuntimeError("PNG has no valid IHDR")
     return channels
+
+
+def _bmp_alpha(data):
+    """True for 32-bit BI_BITFIELDS with a nonzero alpha mask, the only BMP alpha Pillow also reads."""
+    header = int.from_bytes(data[14:18], "little")
+    bits = int.from_bytes(data[28:30], "little")
+    compression = int.from_bytes(data[30:34], "little")
+    return bits == 32 and compression == 3 and header >= 56 and len(data) >= 70 and any(data[66:70])
 
 
 def _jpeg_components(data):
@@ -213,6 +223,9 @@ def _image(source, codec, mode, output_dtype):
             frame = cv.cvtColor(frame, cv.COLOR_BGR2RGB)
         elif frame.shape[-1] == 4:
             frame = cv.cvtColor(frame, cv.COLOR_BGRA2RGBA)
+        if codec == "bmp" and frame.shape[-1] == 4 and not _bmp_alpha(data):
+            # OpenCV keeps the padding byte of BI_BITFIELDS pixels without an alpha mask.
+            frame = frame[..., :3]
         if channels == 2 and frame.shape[-1] == 4:
             frame = frame[..., [0, 3]]
         if codec == "avif" and frame.dtype == np.uint16:
@@ -258,7 +271,8 @@ def decode_image(source, *, mode="RGB", output_dtype=np.uint8):
     Sources are paths, bytes or 1-D uint8 arrays. Modes: UNCHANGED, GRAY,
     GRAY_ALPHA, RGB, RGB_ALPHA (case-insensitive strings or ImageReadMode).
     output_dtype is uint8, uint16 or 'auto'; integer conversion scales the range.
-    Requires optional OpenCV >= 4.13. HEIC and animated PNG are unsupported.
+    BMP is detected too. Requires optional OpenCV >= 4.13. HEIC and animated PNG
+    are unsupported.
     """
     return _image(source, None, mode, output_dtype)
 

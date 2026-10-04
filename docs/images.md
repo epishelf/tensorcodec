@@ -1,6 +1,6 @@
 # Image codecs
 
-Decode JPEG, PNG, WebP, GIF and AVIF into NumPy arrays, and encode grayscale or
+Decode JPEG, PNG, WebP, GIF, AVIF and BMP into NumPy arrays, and encode grayscale or
 RGB arrays as JPEG or PNG. Decoding returns CHW images or NCHW animations on CPU.
 
 ```sh
@@ -26,6 +26,11 @@ installation is sufficient; otherwise the `images` extra installs
 NumPy is the only required dependency for the base package. Image dependencies
 are separate from the base wheel size. Pillow is used only in tests.
 
+Image codecs do not use the native extension. Platforms without a native wheel
+(Windows, Intel macOS, musl, free-threaded Python) install the pure-Python
+`py3-none-any` wheel, which provides the full image API; constructing
+`VideoDecoder` or `AudioDecoder` there raises `ImportError`.
+
 ## Contract and limits
 
 - `decode_image`, `decode_jpeg`, `decode_png`, `decode_webp`, `decode_gif`,
@@ -44,7 +49,11 @@ are separate from the base wheel size. Pillow is used only in tests.
 - AVIF color conversion follows OpenCV. Dropping alpha preserves straight RGB;
   TorchCodec 0.17.0 premultiplies AVIF RGB in that case. Pixel identity with
   TorchCodec is not promised across formats, builds or codec versions.
-- HEIC is unsupported.
+- `decode_image` also detects BMP (no format-specific function). 32-bit
+  `BI_BITFIELDS` BMPs with a nonzero alpha mask keep alpha; other 32-bit BMPs are
+  RGB, as in Pillow, because their fourth byte is padding.
+- HEIC is unsupported. TIFF is not detected: OpenCV premultiplies unassociated
+  alpha and drops gray+alpha samples, so lossless decoding cannot be promised.
 - Other formats depend on the installed OpenCV build. Missing dependencies,
   unsupported codecs and decode failures raise; no alternate decoder is tried.
 - Encoders accept nonempty CHW uint8 arrays with 1 or 3 channels. Both provide
