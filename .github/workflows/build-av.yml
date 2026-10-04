@@ -79,7 +79,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y ffmpeg
           uv venv
-          uv pip install pytest numpy twine 'opencv-python-headless>=4.12' 'Pillow>=11.3' dist/*.whl python-dist/*.whl
+          uv pip install pytest numpy twine 'Pillow>=11.3' dist/*.whl python-dist/*.whl
       - name: Generate baseline runtime fixtures
         run: uv run --no-sync python scripts/check_wheel_runtime.py generate .runtime-fixtures
       - name: Test on glibc 2.17 with Python 3.10 and 3.13
@@ -89,7 +89,7 @@ jobs:
               python="/opt/python/$abi/bin/python"
               "$python" -m venv "/tmp/$abi"
               runtime="/tmp/$abi/bin/python"
-              if [ "$abi" = cp310-cp310 ]; then "$runtime" -m pip install --only-binary=:all: numpy==1.26.4; fi
+              if [ "$abi" = cp310-cp310 ]; then "$runtime" -m pip install --only-binary=:all: numpy==2.0.2; fi
               "$runtime" -m pip install --only-binary=:all: /io/dist/*.whl /io/python-dist/*.whl
               env -u LD_LIBRARY_PATH "$runtime" /io/scripts/check_wheel_runtime.py check /io/.runtime-fixtures
             done

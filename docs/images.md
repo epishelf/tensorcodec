@@ -1,11 +1,7 @@
 # Image codecs
 
 Decode JPEG, PNG, WebP, GIF, AVIF and BMP into NumPy arrays, and encode grayscale or
-RGB arrays as JPEG or PNG. Decoding returns CHW images or NCHW animations on CPU.
-
-```sh
-uv pip install 'tensorcodec[images]'
-```
+RGB arrays as JPEG or PNG (PNG also RGBA). Decoding returns CHW images or NCHW animations on CPU.
 
 ```python
 from tensorcodec.decoders import decode_image, decode_jpeg
@@ -20,12 +16,11 @@ encoded = JpegEncoder(rgb).to_tensor(quality=90)  # 1-D uint8 NumPy array
 
 ## Installation
 
-The image backend uses OpenCV 4.12+ (tested with 4.12, 4.13 and 5.0); earlier
-`opencv-python-headless` wheels lack the GIF and AVIF decoders. An existing compatible
-`cv2` installation is sufficient; otherwise the `images` extra installs
-`opencv-python-headless`. Use only one OpenCV wheel variant per environment.
-NumPy is the only required dependency for the base package. Image dependencies
-are separate from the base wheel size. Pillow is used only in tests.
+`uv pip install tensorcodec` includes the image backend: `opencv-python-headless` 4.12+
+(tested with 4.12, 4.13 and 5.0), imported only when an image codec is first used. Earlier
+wheels lack the GIF and AVIF decoders. Use only one OpenCV wheel variant per environment:
+another variant such as `opencv-python` also provides `cv2` and conflicts with it.
+Pillow is used only in tests.
 
 Image codecs do not need `tensorcodec-av`, so they also work on platforms without its wheels.
 
@@ -53,7 +48,8 @@ Image codecs do not need `tensorcodec-av`, so they also work on platforms withou
 - Other formats depend on the installed OpenCV build (the Windows wheel has no
   AVIF decoder). Missing dependencies,
   unsupported codecs and decode failures raise; no alternate decoder is tried.
-- Encoders accept nonempty CHW uint8 arrays with 1 or 3 channels. Both provide
+- Encoders accept nonempty CHW uint8 arrays with 1 or 3 channels; `PngEncoder` also
+  accepts 4 (RGBA, alpha last, as `decode_image(..., mode="RGBA")` returns). Both provide
   `to_file`, `to_file_like` and `to_tensor`; JPEG quality is 1–100 (default 75),
   PNG compression level is 0–9 (default 6). Encoded bytes need not match TorchCodec.
 

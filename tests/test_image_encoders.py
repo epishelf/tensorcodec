@@ -1,4 +1,4 @@
-"""Image encoder round trips, stream writes and optional dependency boundaries."""
+"""Image encoder round trips, stream writes and lazy OpenCV import."""
 
 import subprocess
 import sys
@@ -29,6 +29,17 @@ def test_encoder_outputs(encoder, channels, tmp_path):
     obj.to_file_like(stream)
     assert path.read_bytes() == stream.getvalue() == result.tobytes()
     np.testing.assert_allclose(decode_image(result, mode="UNCHANGED").astype(int), pixels.astype(int), atol=2)
+
+
+def test_png_rgba_round_trip():
+    rng = np.random.default_rng(0)
+    pixels = rng.integers(0, 256, (4, 13, 17), dtype=np.uint8)
+    pixels[3, :2] = 0  # fully transparent rows keep their color
+    encoded = PngEncoder(pixels).to_tensor()
+    np.testing.assert_array_equal(np.array(Image.open(BytesIO(encoded.tobytes()))), pixels.transpose(1, 2, 0))
+    for mode in ("UNCHANGED", "RGBA"):
+        np.testing.assert_array_equal(decode_image(encoded, mode=mode), pixels)
+    np.testing.assert_array_equal(decode_image(encoded), pixels[:3])
 
 
 def test_png_noncontiguous_input_and_partial_writes():
@@ -64,7 +75,8 @@ def test_encoder_parameter_errors(encoder, key, values):
     "img",
     [
         np.zeros((2, 2), np.uint8),
-        np.zeros((4, 2, 2), np.uint8),
+        np.zeros((2, 2, 2), np.uint8),
+        np.zeros((5, 2, 2), np.uint8),
         np.zeros((3, 0, 2), np.uint8),
         np.zeros((3, 2, 2), np.uint16),
     ],
@@ -72,6 +84,11 @@ def test_encoder_parameter_errors(encoder, key, values):
 def test_encoder_input_errors(img):
     with pytest.raises(ValueError):
         PngEncoder(img)
+
+
+def test_jpeg_rejects_alpha():
+    with pytest.raises(ValueError, match="JpegEncoder needs .* 1/3 channels"):
+        JpegEncoder(np.zeros((4, 2, 2), np.uint8))
 
 
 def test_nonprogressing_writer():
@@ -83,7 +100,7 @@ def test_nonprogressing_writer():
         PngEncoder(np.zeros((3, 2, 2), np.uint8)).to_file_like(Writer())
 
 
-def test_cv2_is_lazy_and_optional():
+def test_cv2_is_lazy():
     subprocess.run(
         [
             sys.executable,
@@ -98,8 +115,8 @@ sys.modules['cv2'] = None
 import numpy as np
 try:
     tensorcodec.encoders.PngEncoder(np.zeros((3, 2, 2), np.uint8)).to_tensor()
-except ImportError as exc:
-    assert 'tensorcodec[images]' in str(exc)
+except ImportError:
+    pass
 else:
     raise AssertionError('missing OpenCV was silently bypassed')
 """,

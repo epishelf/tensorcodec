@@ -1,6 +1,6 @@
 [project]
 name = "tensorcodec"
-version = "0.3.0"
+version = "0.4.0"
 description = "Video, audio and image codecs with TorchCodec-style APIs and NumPy arrays"
 readme = "README.md"
 license = "Apache-2.0"
@@ -9,9 +9,11 @@ authors = [{ name = "Suhwan Choi", email = "milkclouds00@gmail.com" }]
 requires-python = ">=3.10"
 # Exact pin; the marker follows the tensorcodec-av wheel tags. No platform_release check (macOS 14):
 # pip's packaging 22-25 raises on Linux kernel releases that are not PEP 440 versions.
+# opencv-python-headless 4.12+ requires NumPy 2.
 dependencies = [
-    "numpy>=1.26",
-    "tensorcodec-av==0.3.0; platform_python_implementation == 'CPython' and ((sys_platform == 'linux' and (platform_machine == 'x86_64' or platform_machine == 'aarch64')) or (sys_platform == 'darwin' and platform_machine == 'arm64'))",
+    "numpy>=2",
+    "opencv-python-headless>=4.12",
+    "tensorcodec-av==0.4.0; platform_python_implementation == 'CPython' and ((sys_platform == 'linux' and (platform_machine == 'x86_64' or platform_machine == 'aarch64')) or (sys_platform == 'darwin' and platform_machine == 'arm64'))",
 ]
 classifiers = [
     "Development Status :: 3 - Alpha",
@@ -21,15 +23,12 @@ classifiers = [
     "Topic :: Multimedia :: Video",
 ]
 
-[project.optional-dependencies]
-images = ["opencv-python-headless>=4.12"]
-
 [project.urls]
 Repository = "https://github.com/MilkClouds/tensorcodec"
 Issues = "https://github.com/MilkClouds/tensorcodec/issues"
 
 [dependency-groups]
-dev = ["pytest>=8", "ruff>=0.9", "maturin>=1.8,<2", "opencv-python-headless>=4.12", "Pillow>=11.3"]
+dev = ["pytest>=8", "ruff>=0.9", "maturin>=1.8,<2", "Pillow>=11.3"]
 oracle = ["torch==2.14.1", "torchcodec==0.17.0"]
 
 [build-system]
