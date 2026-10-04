@@ -18,25 +18,25 @@ jobs:
       contents: read
       pull-requests: read
     outputs:
-      native: ${{ steps.filter.outputs.native }}
+      av: ${{ steps.filter.outputs.av }}
     steps:
       - uses: actions/checkout@v7
       - uses: dorny/paths-filter@v4
         id: filter
         with:
           filters: |
-            native:
-              - 'native/**'
+            av:
+              - 'av/**'
               - 'scripts/**'
               - 'tests/**'
               - '.github/workflows/**'
               - 'pyproject.toml'
-  # Release builds of every tensorcodec-native wheel: on pushes (including main) and on PRs that touch
+  # Release builds of every tensorcodec-av wheel: on pushes (including main) and on PRs that touch
   # what they build or validate. Other PRs rely on the `test` job's development build.
-  native:
+  av:
     needs: [python, changes]
-    if: github.event_name != 'pull_request' || needs.changes.outputs.native == 'true'
-    uses: ./.github/workflows/build-native.yml
+    if: github.event_name != 'pull_request' || needs.changes.outputs.av == 'true'
+    uses: ./.github/workflows/build-av.yml
   test:
     runs-on: ubuntu-24.04
     steps:
@@ -49,7 +49,7 @@ jobs:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
         with:
-          workspaces: native
+          workspaces: av
       - uses: prefix-dev/setup-pixi@v0.10.2
         with:
           pixi-version: v0.81.0
@@ -76,13 +76,13 @@ jobs:
           "$prefix/bin/ffmpeg" -version
       - name: Static checks
         run: |
-          ruff check src/tensorcodec native/python tests scripts benchmarks/image_codecs.py
-          ruff format --check src/tensorcodec native/python tests scripts benchmarks/image_codecs.py
-          cargo fmt --manifest-path native/Cargo.toml --check
-          cargo clippy --manifest-path native/Cargo.toml --locked -- -D warnings
-      - name: Build tensorcodec-native against prebuilt FFmpeg and install tensorcodec
+          ruff check src/tensorcodec av/python tests scripts benchmarks/image_codecs.py
+          ruff format --check src/tensorcodec av/python tests scripts benchmarks/image_codecs.py
+          cargo fmt --manifest-path av/Cargo.toml --check
+          cargo clippy --manifest-path av/Cargo.toml --locked -- -D warnings
+      - name: Build tensorcodec-av against prebuilt FFmpeg and install tensorcodec
         run: |
-          maturin develop -m native/Cargo.toml --locked
+          maturin develop -m av/Cargo.toml --locked
           pip install -e .
       - name: Install pinned reference
         run: python -m pip install torch==2.14.1 torchcodec==0.17.0 --index-url https://download.pytorch.org/whl/cpu

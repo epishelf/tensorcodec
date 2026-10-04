@@ -1,8 +1,8 @@
 [project]
-name = "tensorcodec-native"
+name = "tensorcodec-av"
 # Version comes from Cargo.toml and must equal tensorcodec's (tests/test_versions.py).
 dynamic = ["version"]
-description = "FFmpeg extension for tensorcodec's video and audio decoders"
+description = "FFmpeg-based audio/video decoders for tensorcodec"
 readme = "README.md"
 license = "Apache-2.0 AND LGPL-3.0-or-later AND BSD-2-Clause"
 license-files = ["LICENSE", "licenses/*"]
@@ -28,5 +28,5 @@ build-backend = "maturin"
 
 [tool.maturin]
 python-source = "python"
-module-name = "tensorcodec_native._native"
+module-name = "tensorcodec_av._av"
 features = ["pyo3/extension-module"]

@@ -1,4 +1,4 @@
-"""Image codecs work without tensorcodec-native; video/audio fail clearly when it is missing or skewed."""
+"""Image codecs work without tensorcodec-av; video/audio fail clearly when it is missing or skewed."""
 
 import subprocess
 import sys
@@ -8,23 +8,23 @@ def run_python(code):
     subprocess.run([sys.executable, "-c", code], check=True)
 
 
-def test_native_extension_is_lazy():
+def test_av_extension_is_lazy():
     run_python(
         """
 import sys
 import tensorcodec
 import tensorcodec.decoders
 import tensorcodec.encoders
-assert 'tensorcodec_native' not in sys.modules
+assert 'tensorcodec_av' not in sys.modules
 """
     )
 
 
-def test_image_codecs_without_native_extension():
+def test_image_codecs_without_tensorcodec_av():
     run_python(
         """
 import sys
-sys.modules['tensorcodec_native'] = None
+sys.modules['tensorcodec_av'] = None
 import numpy as np
 import tensorcodec
 from tensorcodec.decoders import (
@@ -44,9 +44,9 @@ for decoder in (VideoDecoder, AudioDecoder):
     try:
         decoder(b'not media')
     except ImportError as exc:
-        assert 'tensorcodec-native package' in str(exc), exc
+        assert 'require tensorcodec-av' in str(exc), exc
     else:
-        raise AssertionError(f'{decoder.__name__} worked without tensorcodec-native')
+        raise AssertionError(f'{decoder.__name__} worked without tensorcodec-av')
 """
     )
 
@@ -56,15 +56,15 @@ def test_version_skew_is_rejected():
         """
 import sys
 import types
-package = types.ModuleType('tensorcodec_native')
-package._native = types.SimpleNamespace(__version__='0.0.0', Decoder=None)
-sys.modules['tensorcodec_native'] = package
+package = types.ModuleType('tensorcodec_av')
+package._av = types.SimpleNamespace(__version__='0.0.0', Decoder=None)
+sys.modules['tensorcodec_av'] = package
 from tensorcodec.decoders import VideoDecoder
 try:
     VideoDecoder(b'not media')
 except ImportError as exc:
-    assert 'requires tensorcodec-native==' in str(exc) and 'found 0.0.0' in str(exc), exc
+    assert 'requires tensorcodec-av==' in str(exc) and 'found 0.0.0' in str(exc), exc
 else:
-    raise AssertionError('mismatched tensorcodec-native was accepted')
+    raise AssertionError('mismatched tensorcodec-av was accepted')
 """
     )

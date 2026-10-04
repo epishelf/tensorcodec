@@ -7,7 +7,7 @@ uv venv
 uv pip install tensorcodec
 ```
 
-On supported platforms this also installs the matching `tensorcodec-native`
+On supported platforms this also installs the matching `tensorcodec-av`
 wheel, which includes minimal shared FFmpeg 7.1.5 (with dav1d for AV1) and OpenSSL libraries.
 No FFmpeg CLI, Pixi, Rust or libclang is required at runtime. This is the recommended
 installation for a new environment.
@@ -38,11 +38,11 @@ test -f "$FFMPEG_DIR/include/libavcodec/avcodec.h"
 test -f "$FFMPEG_DIR/lib/libavcodec.so.61"
 
 uv venv
-uv pip install 'tensorcodec==0.3.0' 'tensorcodec-native==0.3.0' --no-binary tensorcodec-native
+uv pip install 'tensorcodec==0.3.0' 'tensorcodec-av==0.3.0' --no-binary tensorcodec-av
 ```
 
-`tensorcodec` is pure Python; only `tensorcodec-native` is built from source here,
-and naming it explicitly also covers platforms without native wheels (for example
+`tensorcodec` is pure Python; only `tensorcodec-av` is built from source here,
+and naming it explicitly also covers platforms without `tensorcodec-av` wheels (for example
 Intel macOS), where `tensorcodec` does not depend on it. Releases up to 0.2.0 were
 a single package, built from source with `--no-binary tensorcodec`.
 
@@ -55,14 +55,14 @@ paths, also set `LIBCLANG_PATH` to its library directory.
 
 The example uses a GPL-enabled conda-forge build, unlike the minimal LGPL release
 build. Its additional codecs, dependencies and licensing apply to your environment.
-Review [`native/licenses/README.md`](../native/licenses/README.md) before redistributing a binary
+Review [`av/licenses/README.md`](../av/licenses/README.md) before redistributing a binary
 built against a different FFmpeg configuration.
 
 For development against the same prefix:
 
 ```sh
 uv sync --group dev
-uv run maturin develop -m native/Cargo.toml --locked --uv
+uv run maturin develop -m av/Cargo.toml --locked --uv
 ```
 
 Do not reuse an existing `dist/` wheel while verifying this path: it may contain the
@@ -84,7 +84,7 @@ within the color-conversion tolerances described in the
 
 ## macOS wheels
 
-`tensorcodec-native` macOS 14+ wheels support Apple Silicon, bundling FFmpeg/OpenSSL with `delocate`
+`tensorcodec-av` macOS 14+ wheels support Apple Silicon, bundling FFmpeg/OpenSSL with `delocate`
 (0.1.3 through 0.1.5 also had Intel wheels). CI tests
 the installed wheels and clean Python 3.10/3.13 environments. Developers can run
 `scripts/build_macos_wheel.sh` with Rust, Xcode tools, NASM, Meson, Ninja, pkg-config, coreutils,

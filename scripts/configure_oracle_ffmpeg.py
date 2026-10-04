@@ -5,10 +5,10 @@ import os
 import re
 from pathlib import Path
 
-spec = importlib.util.find_spec("tensorcodec_native")
-libs = Path(spec.origin).parent.parent / "tensorcodec_native.libs"
+spec = importlib.util.find_spec("tensorcodec_av")
+libs = Path(spec.origin).parent.parent / "tensorcodec_av.libs"
 if not libs.is_dir():
-    raise RuntimeError("Expected an installed, repaired tensorcodec-native wheel")
+    raise RuntimeError("Expected an installed, repaired tensorcodec-av wheel")
 for library in libs.glob("lib*.so.*"):
     match = re.fullmatch(r"(lib[^-]+)-[0-9a-f]+(\.so\.\d+)", library.name)
     if match and match[1] in {"libavcodec", "libavformat", "libavutil", "libswscale", "libswresample"}:

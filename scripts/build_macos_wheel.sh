@@ -11,6 +11,6 @@ if [ ! -f "$build_prefix/ready" ]; then
   touch "$build_prefix/ready"
 fi
 export FFMPEG_DIR="$build_prefix/ffmpeg"
-maturin build -m native/Cargo.toml --release --locked --out unrepaired
+maturin build -m av/Cargo.toml --release --locked --out unrepaired
 delocate-wheel --require-archs "$(uname -m)" -w dist unrepaired/*.whl
 python scripts/check_wheel_size.py dist/*.whl

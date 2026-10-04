@@ -1,12 +1,12 @@
 [package]
-name = "tensorcodec-native"
+name = "tensorcodec-av"
 version = "0.3.0"
 edition = "2021"
 rust-version = "1.88"  # ffmpeg-sys-next 9 builds with let chains
 license = "Apache-2.0"
 
 [lib]
-name = "_native"
+name = "_av"
 crate-type = ["cdylib"]
 
 [dependencies]

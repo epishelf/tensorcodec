@@ -31,9 +31,9 @@ do not import with NumPy 2. Use only one OpenCV wheel variant per environment.
 NumPy is the only required dependency for the base package. Image dependencies
 are separate from the base wheel size. Pillow is used only in tests.
 
-Image codecs are pure Python and do not need `tensorcodec-native`, so they work
+Image codecs are pure Python and do not need `tensorcodec-av`, so they work
 on every platform, including Windows and Intel macOS where `pip install
-tensorcodec` installs no native package; constructing `VideoDecoder` or
+tensorcodec` does not install `tensorcodec-av`; constructing `VideoDecoder` or
 `AudioDecoder` there raises `ImportError`.
 
 ## Contract and limits

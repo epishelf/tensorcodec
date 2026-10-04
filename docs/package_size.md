@@ -1,7 +1,7 @@
 # Package size policy
 
 TensorCodec keeps its NumPy-only Python dependency set and bundles a minimal
-FFmpeg/OpenSSL runtime in its default Linux `tensorcodec-native` wheels (the pure-Python
+FFmpeg/OpenSSL runtime in its default Linux `tensorcodec-av` wheels (the pure-Python
 `tensorcodec` wheel adds about 30 KiB and is not size-checked). Size limits prevent additions
 from silently increasing the distributed binary footprint.
 
@@ -25,7 +25,7 @@ uv run --no-project python scripts/check_wheel_size.py dist/*.whl --output repor
 ```
 
 Each architecture is checked independently. Exactly reaching a limit passes;
-exceeding either limit fails. The `linux` job of `build-native.yml` runs this after
+exceeding either limit fails. The `linux` job of `build-av.yml` runs this after
 `auditwheel repair`, in CI and before every upload. JSON reports are separate
 artifacts, not files in `dist/`. Actions summaries include changes from the
 committed published baseline. The `test` job also unit-tests the checker.

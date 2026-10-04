@@ -14,11 +14,11 @@ concurrency:
 jobs:
   python:
     uses: ./.github/workflows/build-python.yml
-  native:
+  av:
     needs: python
-    uses: ./.github/workflows/build-native.yml
+    uses: ./.github/workflows/build-av.yml
   check:
-    needs: [python, native]
+    needs: [python, av]
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/download-artifact@v8
@@ -32,11 +32,11 @@ jobs:
           files = sorted(p for p in pathlib.Path("artifacts").rglob("*") if p.is_file())
           names = [f.name for f in files]
           print("\n".join(names))
-          versions = {re.match(r"tensorcodec(?:_native)?-([^-]+?)(?:\.tar\.gz|-)", n)[1] for n in names}
+          versions = {re.match(r"tensorcodec(?:_av)?-([^-]+?)(?:\.tar\.gz|-)", n)[1] for n in names}
           assert len(versions) == 1, f"mixed versions: {versions}"
-          expected = ["tensorcodec-*-py3-none-any.whl", "tensorcodec-*.tar.gz", "tensorcodec_native-*.tar.gz",
-                      "tensorcodec_native-*manylinux*x86_64.whl", "tensorcodec_native-*manylinux*aarch64.whl",
-                      "tensorcodec_native-*macosx*arm64.whl"]
+          expected = ["tensorcodec-*-py3-none-any.whl", "tensorcodec-*.tar.gz", "tensorcodec_av-*.tar.gz",
+                      "tensorcodec_av-*manylinux*x86_64.whl", "tensorcodec_av-*manylinux*aarch64.whl",
+                      "tensorcodec_av-*macosx*arm64.whl"]
           for pattern in expected:
               assert len([f for f in files if f.match(pattern)]) == 1, pattern
           assert len(files) == len(expected), names
@@ -54,18 +54,18 @@ jobs:
     steps:
       - uses: actions/download-artifact@v8
         with:
-          pattern: dist-native-*
+          pattern: dist-av-*
           merge-multiple: true
-          path: native-dist
+          path: av-dist
       - uses: actions/download-artifact@v8
         with:
           name: dist-python
           path: python-dist
-      # Native first: tensorcodec pins tensorcodec-native exactly, so it must not appear before its pin exists.
-      - name: Publish tensorcodec-native
+      # tensorcodec-av first: tensorcodec pins tensorcodec-av exactly, so it must not appear before its pin exists.
+      - name: Publish tensorcodec-av
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
-          packages-dir: native-dist/
+          packages-dir: av-dist/
       - name: Publish tensorcodec
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
