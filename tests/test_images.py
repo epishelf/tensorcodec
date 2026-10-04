@@ -54,18 +54,10 @@ def encoded_images(tmp_path_factory):
     }.items():
         run_ffmpeg("-i", root / "source.png", "-frames:v", 1, *options, "-threads", 1, root / f"image.{codec}")
     Image.fromarray(pixels).save(root / "image.webp", lossless=True)
-    (root / "second.png").write_bytes(png_bytes(255 - pixels))
-    run_ffmpeg(
-        "-framerate",
-        2,
-        "-pattern_type",
-        "glob",
-        "-i",
-        str(root / "s*.png"),
-        "-threads",
-        1,
-        root / "animated.gif",
-    )
+    # Numbered sequence: FFmpeg's glob pattern type is unavailable on Windows.
+    for index, frame in enumerate((pixels, 255 - pixels)):
+        (root / f"frame{index}.png").write_bytes(png_bytes(frame))
+    run_ffmpeg("-framerate", 2, "-i", root / "frame%d.png", "-threads", 1, root / "animated.gif")
     return root
 
 
