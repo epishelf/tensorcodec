@@ -164,6 +164,7 @@ See the [compatibility contract](docs/compatibility.md) and
   Windows and Intel macOS, image codecs work and `VideoDecoder`/`AudioDecoder` raise `ImportError`.
   Environment markers cannot detect musl or free-threaded CPython on Linux x86_64/aarch64, so
   installers there still try `tensorcodec-native` (no wheel; its sdist needs FFmpeg 7 and Rust).
+  For image codecs only there, use `pip install --no-deps tensorcodec numpy`.
 - **Exact seeking:** scans packet timestamps when opening the decoder. Incorrect
   container keyframe flags can produce corrupt frames; repaired input or corrected
   frame mappings are needed in that case.

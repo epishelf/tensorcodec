@@ -1,6 +1,6 @@
 # Publishing TensorCodec
 
-Release version: `0.2.0`. One release publishes two PyPI projects from the same
+Release version: `0.3.0`. One release publishes two PyPI projects from the same
 commit and version:
 
 | Project | Contents | Build | Distributions |

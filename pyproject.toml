@@ -1,6 +1,6 @@
 [project]
 name = "tensorcodec"
-version = "0.2.0"
+version = "0.3.0"
 description = "Video, audio and image codecs with TorchCodec-style APIs and NumPy arrays"
 readme = "README.md"
 license = "Apache-2.0"
@@ -11,7 +11,7 @@ requires-python = ">=3.10"
 # manylinux x86_64/aarch64, macOS 14+ arm64 = Darwin 23+); elsewhere only the image codecs work.
 dependencies = [
     "numpy>=1.26",
-    "tensorcodec-native==0.2.0; platform_python_implementation == 'CPython' and ((sys_platform == 'linux' and (platform_machine == 'x86_64' or platform_machine == 'aarch64')) or (sys_platform == 'darwin' and platform_machine == 'arm64' and platform_release >= '23'))",
+    "tensorcodec-native==0.3.0; platform_python_implementation == 'CPython' and ((sys_platform == 'linux' and (platform_machine == 'x86_64' or platform_machine == 'aarch64')) or (sys_platform == 'darwin' and platform_machine == 'arm64' and platform_release >= '23'))",
 ]
 classifiers = [
     "Development Status :: 3 - Alpha",
@@ -24,7 +24,7 @@ classifiers = [
 [project.optional-dependencies]
 images = ["opencv-python-headless>=4.12"]
 # Unconditional, for platforms outside the marker with a source-built tensorcodec-native.
-native = ["tensorcodec-native==0.2.0"]
+native = ["tensorcodec-native==0.3.0"]
 
 [project.urls]
 Repository = "https://github.com/MilkClouds/tensorcodec"

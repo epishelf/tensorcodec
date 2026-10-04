@@ -9,6 +9,8 @@ from packaging.requirements import Requirement
 
 tomllib = pytest.importorskip("tomllib")
 ROOT = Path(__file__).resolve().parents[1]
+# The tensorcodec sdist ships tests but not native/.
+needs_native_sources = pytest.mark.skipif(not (ROOT / "native").is_dir(), reason="needs a repository checkout")
 
 
 def native_requirements(project):
@@ -17,10 +19,13 @@ def native_requirements(project):
     return [r for r in requirements if r.name == "tensorcodec-native"]
 
 
+@needs_native_sources
 def test_versions_are_locked():
     project = tomllib.loads((ROOT / "pyproject.toml").read_text())["project"]
     version = project["version"]
     cargo = tomllib.loads((ROOT / "native/Cargo.toml").read_text())["package"]["version"]
+    lock = tomllib.loads((ROOT / "native/Cargo.lock").read_text())["package"]
+    assert [p["version"] for p in lock if p["name"] == "tensorcodec-native"] == [cargo]
     init = re.search(r'^__version__ = "(.+)"$', (ROOT / "src/tensorcodec/__init__.py").read_text(), re.MULTILINE)[1]
     assert cargo == init == version
     pins = native_requirements(project)
@@ -28,6 +33,7 @@ def test_versions_are_locked():
     assert all(str(r.specifier) == f"=={version}" for r in pins)
 
 
+@needs_native_sources
 def test_native_license_matches_project_license():
     assert (ROOT / "native/LICENSE").read_bytes() == (ROOT / "LICENSE").read_bytes()
 
