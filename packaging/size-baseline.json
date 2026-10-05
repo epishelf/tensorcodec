@@ -1,21 +1,21 @@
 {
   "tensorcodec": {
-    "version": "0.4.0",
-    "source": "https://pypi.org/project/tensorcodec-av/0.4.0/",
+    "version": "0.4.1",
+    "source": "https://pypi.org/project/tensorcodec-av/0.4.1/",
     "wheels": [
       {
-        "filename": "tensorcodec_av-0.4.0-cp310-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
-        "download_bytes": 11625568,
+        "filename": "tensorcodec_av-0.4.1-cp310-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
+        "download_bytes": 11625598,
         "unpacked_bytes": 28024892,
-        "sha256": "64cafa54ac9aea3a4e8a1ef7095289374415f5fc2333edc2d7358f4f7d1e369e",
-        "url": "https://files.pythonhosted.org/packages/7b/64/a5bdab3e731aeaf42bd702bda2cefd22a99e9a1307fa03b36fcf8b9f05a9/tensorcodec_av-0.4.0-cp310-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl"
+        "sha256": "b7c00e28cf72514a1591efa854800066b687003dd6b785640ed8b7ea9504058a",
+        "url": "https://files.pythonhosted.org/packages/db/48/9866093e876e08330655b98254f93ba39e646c87f134f382a63e4a2b86ba/tensorcodec_av-0.4.1-cp310-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl"
       },
       {
-        "filename": "tensorcodec_av-0.4.0-cp310-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl",
-        "download_bytes": 11389581,
+        "filename": "tensorcodec_av-0.4.1-cp310-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl",
+        "download_bytes": 11389603,
         "unpacked_bytes": 24899149,
-        "sha256": "a01a154065b9a7c88ac978248a5c4774fe0c1d3cb2a2038990c062c914442466",
-        "url": "https://files.pythonhosted.org/packages/16/31/cfd859ff01ee4952eb5c02399131fedf043f70e2a0f6c4934ac6acd64d7d/tensorcodec_av-0.4.0-cp310-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl"
+        "sha256": "17dbe83d9fa479f70ed526e14ac632f047bd7a8b74bc2eb0dc7d44a90f7d5314",
+        "url": "https://files.pythonhosted.org/packages/d7/0f/e1d54e1f2977ce162ba67c440f9aae4afec1bb4faee05cfc8e90151b29f0/tensorcodec_av-0.4.1-cp310-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl"
       }
     ]
   },
