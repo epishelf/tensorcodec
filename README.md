@@ -60,7 +60,7 @@ with VideoDecoder("video.mkv", seek_mode="timestamp") as decoder:
     frames = decoder.get_frames_played_at([10.0, 10.1, 10.2])
 ```
 
-Decoder transforms (since v0.1.5) resize and crop inside the decoder, as TorchCodec's do:
+Decoder transforms (since v0.1.5) resize and crop inside the decoder:
 
 ```python
 from tensorcodec.transforms import CenterCrop, Resize
@@ -68,6 +68,10 @@ from tensorcodec.transforms import CenterCrop, Resize
 with VideoDecoder("video.mp4", transforms=[Resize((256, 340)), CenterCrop((224, 224))]) as decoder:
     frames = decoder.get_frames_at([0, 10])  # (2, 3, 224, 224)
 ```
+
+Crops select the same pixels as TorchCodec's. Since v0.4.2, `Resize` scales in YUV while converting
+to RGB, so it costs no more than native-size output; its pixels differ from TorchCodec's by about
+0.9 levels on average (see [resizing](docs/compatibility.md#resizing)).
 
 This TensorCodec extension selects by actual PTS and retries seeks that overshoot.
 It supports time queries, including ranges with explicit `fps`, but not frame

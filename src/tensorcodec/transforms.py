@@ -1,8 +1,9 @@
 """Decoder transforms: geometric operations applied to RGB frames inside the decoder.
 
 They mirror TorchCodec 0.17's ``torchcodec.transforms`` (and the complementary TorchVision v2 transforms): a
-sequence of transforms is a pipeline, applied in order after color conversion and display rotation. Resizing is
-bilinear with antialiasing (swscale's bilinear filter widens with the downscale ratio); crops select exact pixels.
+sequence of transforms is a pipeline, applied in order after display rotation. Crops select exact RGB pixels, as
+TorchCodec's do. Resizing is bilinear with antialiasing (swscale's bilinear filter widens with the downscale ratio)
+and, unlike TorchCodec, happens in YUV while converting to RGB; see `Resize`.
 """
 
 from __future__ import annotations
@@ -37,7 +38,14 @@ class DecoderTransform(ABC):
 
 
 class Resize(DecoderTransform):
-    """Resize to `size` (height, width); bilinear interpolation, antialiased."""
+    """Resize to `size` (height, width); bilinear interpolation, antialiased.
+
+    Frames are resized in YUV while converting to RGB (one swscale pass at the output size), reading any crops before
+    the first resize from the source planes. TorchCodec converts to RGB at full size, then resizes, so outputs differ
+    by about 0.9 levels on average, mostly TorchCodec's darker bias from its full-size conversion; this output is
+    closer to a float64 reference. Differences reach a few levels on natural content and more at sharp, saturated
+    color edges. See docs/compatibility.md.
+    """
 
     def __init__(self, size):
         self.size = _size("Resize", size)

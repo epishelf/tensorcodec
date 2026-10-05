@@ -54,8 +54,8 @@ jobs:
           "$prefix/bin/ffmpeg" -version
       - name: Static checks
         run: |
-          ruff check src/tensorcodec av/python tests scripts benchmarks/image_codecs.py
-          ruff format --check src/tensorcodec av/python tests scripts benchmarks/image_codecs.py
+          ruff check src/tensorcodec av/python tests scripts benchmarks/image_codecs.py benchmarks/transform_bench.py
+          ruff format --check src/tensorcodec av/python tests scripts benchmarks/image_codecs.py benchmarks/transform_bench.py
           cargo fmt --manifest-path av/Cargo.toml --check
           cargo clippy --manifest-path av/Cargo.toml --locked -- -D warnings
       - name: Build tensorcodec-av against prebuilt FFmpeg and install tensorcodec

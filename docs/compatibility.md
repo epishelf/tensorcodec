@@ -19,11 +19,11 @@ FFmpeg; arrays are returned as NumPy instead of torch.Tensor.
 - NCHW/NHWC, paths/URLs, encoded bytes, uint8 arrays and seekable file-like input.
 - Exact and approximate video seeking; exact is the default.
 - Decoder transforms (`tensorcodec.transforms`): `Resize` (bilinear, antialiased), `CenterCrop`
-  and `RandomCrop`, applied in order to RGB frames after display rotation, as TorchCodec does
-  (frames match TorchCodec 0.17.0 within one level). The TorchCodec and TorchVision v2
-  counterparts are accepted and converted; other transforms fail explicitly. `RandomCrop`
-  draws its position once per decoder from NumPy's global random state. Native output
-  takes no transforms.
+  and `RandomCrop`, applied in order after display rotation, as TorchCodec does. Crops match
+  TorchCodec 0.17.0 within one level; resizing is done differently and does not (see
+  [resizing](#resizing)). The TorchCodec and TorchVision v2 counterparts are accepted and
+  converted; other transforms fail explicitly. `RandomCrop` draws its position once per
+  decoder from NumPy's global random state. Native output takes no transforms.
 
 CUDA, torch inputs, HDR tone mapping, arbitrary-angle rotation,
 video/audio encoders and samplers are outside the
@@ -57,7 +57,8 @@ uv run --group oracle pytest --compare
 ```
 
 Comparisons check timing separately from pixels. One uint8 RGB unit or 1/65535
-for float32 RGB is allowed for conversion rounding; frame identities have independent
+for float32 RGB is allowed for conversion rounding (resized frames are compared with a float64
+reference instead; see [resizing](#resizing)); frame identities have independent
 expectations. Tests requiring the oracle must fail on a missing/wrong reference
 when `--compare` is requested. Production installation does not require torch.
 
@@ -90,6 +91,64 @@ indexing and FPS resampling. RGB results retain their existing behavior. Native
 mode preserves encoded pixel coordinates, including inputs with display matrices.
 Playback selection follows the same TorchCodec contract as RGB, including the
 frame overlapping a range's start; it does not copy PyAV's legacy PTS-only range rule.
+
+## Resizing
+
+`Resize` resizes in YUV while converting to RGB: one bilinear swscale pass from the decoded planes
+to RGB at the output size, interpolating chroma at full resolution with swscale's default
+centered siting. TorchCodec 0.17.0 converts to RGB at full size, then resizes the RGB frame. In
+TensorCodec the single pass costs about as much as native-size output (see the
+[benchmarks](../benchmarks/README.md#decoder-transforms)).
+
+In a pipeline:
+
+- Crops before the first resize select its region in the decoded planes. An offset inside a
+  chroma pair (an odd offset for 4:2:0) starts the chroma plane at that pair and shifts the
+  chroma siting to match, so colors stay in place.
+- A display rotation is applied after the first resize, to its RGB output. Right-angle rotations
+  commute with the resampling, so this matches rotating first up to rounding.
+- Transforms after the first resize work on its RGB output. A later resize is the same kind of
+  pass, from that RGB image.
+- A resize to the current size does nothing.
+- After a crop, pixel formats that plane offsets cannot address (paletted, bitstream, hardware,
+  or packed with subsampled chroma) are converted at full size first, and the resize then
+  works from RGB.
+- swscale treats a region of odd width or height as if its subsampled chroma covered the
+  region exactly, which stretches chroma by up to half a pixel at the far edge. Even-sized
+  regions are unaffected. With an odd offset and an even size, the last row or column has no
+  chroma sample of its own beyond the region and reuses its neighbor's.
+
+Outputs therefore differ from TorchCodec's by about 0.9 levels on average. Most of that is
+TorchCodec's darker bias: swscale's fast full-size YUV to RGB conversion comes out 0.6-1.0
+levels darker than exact arithmetic, and resizing afterwards keeps the bias. Native-size
+decoding uses that same conversion in both libraries, so the bias is shared there. The single
+pass has no such bias and is closer to a float64 reference: exact limited-range YUV to RGB with
+bilinear chroma upsampling, then the antialiased bilinear filter of TorchVision v2 and PIL.
+
+Measured on 640x480 4:2:0 clips, 20 frames each. "real" is a 10 s excerpt of the Sintel 480p
+trailer cropped to 640x480; "syn" is FFmpeg `testsrc2`.
+
+| clip | output | vs TorchCodec: max / mean / bias / >1 level / p99.9 | vs float64 reference, mean abs (bias): TorchCodec / TensorCodec |
+| --- | --- | --- | --- |
+| syn AV1 | 224² | 42 / 0.80 / +0.60 / 14.6% / 18 | 1.27 (−0.65) / 1.03 (−0.05) |
+| syn AV1 | 128² | 25 / 0.76 / +0.60 / 15.0% / 12 | 0.84 (−0.65) / 0.60 (−0.04) |
+| syn AV1 | crop 400² → 224² | 59 / 1.07 / +0.72 / 22.3% / 33 | 1.43 (−0.76) / 1.15 (−0.04) |
+| real AV1 | 224² | 17 / 0.90 / +0.87 / 21.8% / 5 | 0.91 (−0.90) / 0.25 (−0.03) |
+| real AV1 | 128² | 11 / 0.89 / +0.87 / 20.8% / 4 | 0.91 (−0.90) / 0.23 (−0.04) |
+| real AV1 | crop 400² → 224² | 18 / 1.08 / +1.04 / 26.5% / 4 | 1.09 (−1.08) / 0.29 (−0.03) |
+| syn H.264 | 224² | 49 / 0.81 / +0.59 / 15.2% / 19 | 1.27 (−0.65) / 1.05 (−0.06) |
+| syn H.264 | 128² | 27 / 0.78 / +0.60 / 15.7% / 12 | 0.83 (−0.64) / 0.61 (−0.04) |
+| syn H.264 | crop 400² → 224² | 58 / 1.08 / +0.72 / 22.6% / 33 | 1.43 (−0.76) / 1.16 (−0.04) |
+| real H.264 | 224² | 26 / 0.90 / +0.86 / 21.9% / 5 | 0.90 (−0.89) / 0.25 (−0.03) |
+| real H.264 | 128² | 16 / 0.89 / +0.86 / 20.9% / 4 | 0.90 (−0.89) / 0.22 (−0.04) |
+| real H.264 | crop 400² → 224² | 27 / 1.08 / +1.04 / 26.6% / 5 | 1.08 (−1.07) / 0.29 (−0.04) |
+
+The largest differences are at sharp, saturated color edges, where TorchCodec's
+nearest-neighbor chroma followed by an RGB resize and direct bilinear chroma interpolation
+disagree. Tests compare resized frames with the float64 reference on natural content: the mean
+error must stay within 0.25 levels of zero and the mean absolute error below 0.75 levels. The
+measured values are |bias| <= 0.16 and 0.19-0.63, and TorchCodec's path would fail the bias bound.
+
 ## Timestamp mode
 
 `seek_mode="timestamp"` is an opt-in TensorCodec extension. Existing `exact` and

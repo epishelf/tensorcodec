@@ -49,6 +49,43 @@ This tool generates fresh inputs with FFmpeg. Its codec matrix measures speed;
 it does not assert pixel or timestamp correctness. See
 [container and seek behavior](../docs/container_robustness.md) for tested guarantees.
 
+## Decoder transforms
+
+`benchmarks.transform_bench` times `get_frames_at` per returned frame on one persistent decoder,
+at native size and with `Resize` to each square size. Without `--video` it generates 640x480
+GOP-2 `testsrc2` clips in AV1 (SVT-AV1) and H.264. Calls alternate between pipelines, so changes
+in machine load affect them alike. Run it under each version to compare.
+
+```sh
+uv run --no-sync python -m benchmarks.transform_bench
+uv run --no-sync python -m benchmarks.transform_bench --video clip.mp4 --sizes 224 128 --batches 1 20
+```
+
+v0.4.1 (convert at full size, then resize in RGB) against v0.4.2 (resize in YUV while
+converting, one swscale pass). Setup: Intel Core i7-14700K under WSL2, one core pinned with
+`taskset`, other load present; conda-forge FFmpeg 7.1.1; one decoder thread. Values are ms per
+returned frame, the mean of two runs of each version, each the median of 50 calls. All clips are
+640x480, 30 fps, 300 frames, GOP 2: `syn` is `testsrc2`, `real` is 10 s of the Sintel 480p
+trailer cropped to 640x480. The 1-frame case is the middle (odd) frame. The 20-frame case is
+every 15th frame, so each needs its own seek and up to two decoded frames.
+
+| clip | frames | native 0.4.1 | native 0.4.2 | 224² 0.4.1 | 224² 0.4.2 | 128² 0.4.1 | 128² 0.4.2 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| syn AV1 | 1 | 1.89 | 1.93 | 2.34 | 1.91 | 2.17 | 1.83 |
+| syn AV1 | 20 | 1.62 | 1.62 | 2.09 | 1.60 | 1.89 | 1.52 |
+| real AV1 | 1 | 2.09 | 1.92 | 2.52 | 1.89 | 2.37 | 1.81 |
+| real AV1 | 20 | 1.58 | 1.52 | 2.05 | 1.48 | 1.87 | 1.40 |
+| syn H.264 | 1 | 2.24 | 2.30 | 2.78 | 2.30 | 2.52 | 2.18 |
+| syn H.264 | 20 | 1.75 | 1.78 | 2.23 | 1.75 | 2.05 | 1.67 |
+| real H.264 | 1 | 3.10 | 3.06 | 3.58 | 3.08 | 3.37 | 2.96 |
+| real H.264 | 20 | 2.03 | 2.02 | 2.49 | 1.99 | 2.31 | 1.91 |
+
+Native-size decoding is unchanged; differences there are run-to-run noise. Decoding dominates.
+On this machine, swscale's 640x480 yuv420p to rgb24 conversion takes about 0.07 ms per frame.
+The v0.4.1 RGB resize added 0.56 ms (224²) or 0.38 ms (128²); the single pass takes 0.12 ms or
+0.07 ms plus interleaving. A resized decode now costs the same as, or slightly less than, a
+native-size one. See [resizing](../docs/compatibility.md#resizing) for how the pixels differ.
+
 ## Optional I/O and plotting
 
 To separate opening from an 11-frame playback window, counting bytes returned by

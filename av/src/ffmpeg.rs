@@ -43,8 +43,8 @@ pub enum VideoRequest {
     Timestamps(Vec<f64>),
 }
 
-/// A geometric step on RGB frames; a rotation (counterclockwise quarter turns) comes first, then
-/// crops and resizes in the rotated frame's coordinates.
+/// A geometric step; a rotation (counterclockwise quarter turns) comes first, then crops and resizes in the
+/// rotated frame's coordinates. `Pipeline` decides which run on the decoded planes and which on RGB.
 #[derive(Clone, Copy, PartialEq)]
 pub enum Op {
     Rotate {
@@ -62,19 +62,49 @@ pub enum Op {
     },
 }
 
-/// One resize step's swscale context (bilinear, RGB to RGB at the same depth) and its output frame.
+/// One resize step: a bilinear swscale pass from a source region straight to RGB at the output size. swscale
+/// writes planar RGB with SIMD (its packed full-chroma writer is C only), interleaved into `frame` afterwards.
 struct Resizer {
     scale: *mut av::SwsContext,
-    config: (i32, i32, i32, i32, i32),
+    config: [i32; 8],
+    planar: *mut av::AVFrame,
     frame: *mut av::AVFrame,
+}
+impl Resizer {
+    fn new() -> Result<Self> {
+        let (planar, frame) = unsafe { (av::av_frame_alloc(), av::av_frame_alloc()) };
+        // Owned before the check, so Drop frees whichever allocation succeeded.
+        let resizer = Self {
+            scale: ptr::null_mut(),
+            config: [0; 8],
+            planar,
+            frame,
+        };
+        if planar.is_null() || frame.is_null() {
+            return Err(failure("cannot allocate resize frames"));
+        }
+        Ok(resizer)
+    }
 }
 impl Drop for Resizer {
     fn drop(&mut self) {
         unsafe {
             av::sws_freeContext(self.scale);
+            av::av_frame_free(&mut self.planar);
             av::av_frame_free(&mut self.frame);
         }
     }
+}
+
+/// Planes of a region to resize: decoded YUV/RGB planes or an RGB intermediate. `chroma_position` is swscale's
+/// `src_h_chr_pos`/`src_v_chr_pos` (1/256 luma pixel; -513 for its default, centered siting).
+struct Region {
+    data: [*const u8; 8],
+    linesize: [i32; 8],
+    format: av::AVPixelFormat,
+    width: i32,
+    height: i32,
+    chroma_position: (i32, i32),
 }
 
 enum Selection {
@@ -214,7 +244,7 @@ pub struct Decoder {
     frame: *mut av::AVFrame,
     rgb_frame: *mut av::AVFrame,
     scale: *mut av::SwsContext,
-    scale_config: Option<(i32, i32, i32, i32)>,
+    scale_config: Option<[i32; 4]>,
     resizers: Vec<Resizer>,
     rotated: Vec<u8>,
     io: *mut av::AVIOContext,
@@ -892,6 +922,7 @@ impl Decoder {
         let mut pts = vec![0.; length];
         let mut durations = vec![0.; length];
         let mut active_key = None;
+        let pipeline = Pipeline::new(ops, (self.video_layout.0, self.video_layout.1));
         let stride = count * if high_depth { 2 } else { 1 };
         for (selection, positions) in requests {
             match selection {
@@ -910,95 +941,53 @@ impl Decoder {
                     return Err(failure("dynamic frame dimensions are unsupported"));
                 }
                 let input_format: av::AVPixelFormat = std::mem::transmute(frame.format);
-                let output_frame = if native {
+                let format = if high_depth {
+                    av::AVPixelFormat::AV_PIX_FMT_RGB48LE
+                } else {
+                    av::AVPixelFormat::AV_PIX_FMT_RGB24
+                };
+                let (data, linesize, size, rest, slot) = if native {
                     if input_format != source_format {
                         return Err(Error("pixel format changed within stream".into(), true));
                     }
-                    frame
+                    let size = (frame.width, frame.height);
+                    (
+                        frame.data[0] as *const u8,
+                        frame.linesize[0],
+                        size,
+                        &[][..],
+                        0,
+                    )
+                } else if let Some((region, (h, w))) = pipeline
+                    .first
+                    .and_then(|(rect, size)| Some((region_planes(frame, rect)?, size)))
+                {
+                    let (data, linesize) =
+                        self.resize(0, &region, (w, h), high_depth, Some(frame))?;
+                    (data, linesize, (w, h), &pipeline.after_first[..], 1)
                 } else {
-                    let output_format = if high_depth {
-                        av::AVPixelFormat::AV_PIX_FMT_RGB48LE
-                    } else {
-                        av::AVPixelFormat::AV_PIX_FMT_RGB24
-                    };
-                    let config = (
+                    // Full-size color conversion, then every op on RGB.
+                    let config = [
                         frame.width,
                         frame.height,
                         input_format as i32,
-                        output_format as i32,
-                    );
+                        format as i32,
+                    ];
                     if self.scale_config != Some(config) {
                         av::sws_freeContext(self.scale);
-                        self.scale = av::sws_getContext(
-                            frame.width,
-                            frame.height,
-                            input_format,
-                            frame.width,
-                            frame.height,
-                            output_format,
+                        self.scale = scale_context(
+                            (frame.width, frame.height, input_format),
+                            (frame.width, frame.height, format),
                             0,
-                            ptr::null_mut(),
-                            ptr::null_mut(),
-                            ptr::null(),
+                            (-513, -513),
                         );
                         self.scale_config = Some(config);
                     }
                     if self.scale.is_null() {
                         return Err(failure("cannot initialize color conversion"));
                     }
-                    let mut inverse = ptr::null_mut();
-                    let mut table = ptr::null_mut();
-                    let (
-                        mut source_range,
-                        mut destination_range,
-                        mut brightness,
-                        mut contrast,
-                        mut saturation,
-                    ) = (0, 0, 0, 0, 0);
-                    check(
-                        av::sws_getColorspaceDetails(
-                            self.scale,
-                            &mut inverse,
-                            &mut source_range,
-                            &mut table,
-                            &mut destination_range,
-                            &mut brightness,
-                            &mut contrast,
-                            &mut saturation,
-                        ),
-                        "read color conversion settings",
-                    )?;
-                    if frame.color_range != av::AVColorRange::AVCOL_RANGE_UNSPECIFIED {
-                        source_range =
-                            i32::from(frame.color_range == av::AVColorRange::AVCOL_RANGE_JPEG);
-                    }
-                    let coefficients = av::sws_getCoefficients(frame.colorspace as i32);
-                    check(
-                        av::sws_setColorspaceDetails(
-                            self.scale,
-                            coefficients,
-                            source_range,
-                            coefficients,
-                            destination_range,
-                            brightness,
-                            contrast,
-                            saturation,
-                        ),
-                        "configure color conversion",
-                    )?;
-                    if (*self.rgb_frame).width != frame.width
-                        || (*self.rgb_frame).height != frame.height
-                        || (*self.rgb_frame).format != output_format as i32
-                    {
-                        av::av_frame_unref(self.rgb_frame);
-                        (*self.rgb_frame).width = frame.width;
-                        (*self.rgb_frame).height = frame.height;
-                        (*self.rgb_frame).format = output_format as i32;
-                        check(
-                            av::av_frame_get_buffer(self.rgb_frame, 32),
-                            "allocate RGB frame",
-                        )?;
-                    }
+                    configure_colors(self.scale, frame)?;
+                    ensure_frame(self.rgb_frame, frame.width, frame.height, format)?;
                     let rows = av::sws_scale(
                         self.scale,
                         frame.data.as_ptr() as *const *const u8,
@@ -1011,18 +1000,18 @@ impl Decoder {
                     if rows != frame.height {
                         return Err(failure("color conversion failed"));
                     }
-                    &*self.rgb_frame
+                    let rgb = &*self.rgb_frame;
+                    let size = (frame.width, frame.height);
+                    (
+                        rgb.data[0] as *const u8,
+                        rgb.linesize[0],
+                        size,
+                        &pipeline.ops[..],
+                        0,
+                    )
                 };
-                let (data, linesize) = if ops.is_empty() {
-                    (output_frame.data[0] as *const u8, output_frame.linesize[0])
-                } else {
-                    let format = if high_depth {
-                        av::AVPixelFormat::AV_PIX_FMT_RGB48LE
-                    } else {
-                        av::AVPixelFormat::AV_PIX_FMT_RGB24
-                    };
-                    self.transform(output_frame, format, ops)?
-                };
+                let (data, linesize) =
+                    self.transform((data, linesize), size, format, rest, slot)?;
                 let row_bytes = width * channels * if high_depth { 2 } else { 1 };
                 if data.is_null() || (linesize.unsigned_abs() as usize) < row_bytes {
                     return Err(failure("invalid decoded frame stride"));
@@ -1080,22 +1069,18 @@ impl Decoder {
         })
     }
 
-    /// Applies `ops` to an RGB frame: a crop moves the view, a resize scales it into its own frame.
-    /// Returns the result's first row and stride.
+    /// Applies `ops` to an RGB image (first row, stride) of `size` (width, height): a crop moves the view, a
+    /// resize scales it into resize slot `slot` onwards. Returns the result's first row and stride.
     unsafe fn transform(
         &mut self,
-        frame: &av::AVFrame,
+        (mut data, mut linesize): (*const u8, i32),
+        (mut width, mut height): (i32, i32),
         format: av::AVPixelFormat,
         ops: &[Op],
+        mut slot: usize,
     ) -> Result<(*const u8, i32)> {
-        let pixel_bytes: isize = if format == av::AVPixelFormat::AV_PIX_FMT_RGB24 {
-            3
-        } else {
-            6
-        };
-        let (mut data, mut linesize) = (frame.data[0] as *const u8, frame.linesize[0]);
-        let (mut width, mut height) = (frame.width, frame.height);
-        let mut resize = 0;
+        let high_depth = format == av::AVPixelFormat::AV_PIX_FMT_RGB48LE;
+        let pixel_bytes: isize = if high_depth { 6 } else { 3 };
         for op in ops {
             match *op {
                 Op::Rotate { turns } => {
@@ -1146,68 +1131,96 @@ impl Decoder {
                     height: h,
                     width: w,
                 } => {
-                    let config = (width, height, w, h, format as i32);
-                    if self.resizers.len() <= resize {
-                        let frame = av::av_frame_alloc();
-                        if frame.is_null() {
-                            return Err(failure("cannot allocate resize frame"));
-                        }
-                        self.resizers.push(Resizer {
-                            scale: ptr::null_mut(),
-                            config: (0, 0, 0, 0, 0),
-                            frame,
-                        });
-                    }
-                    let resizer = &mut self.resizers[resize];
-                    if resizer.scale.is_null() || resizer.config != config {
-                        av::sws_freeContext(resizer.scale);
-                        resizer.scale = av::sws_getContext(
-                            width,
-                            height,
-                            format,
-                            w,
-                            h,
-                            format,
-                            av::SWS_BILINEAR,
-                            ptr::null_mut(),
-                            ptr::null_mut(),
-                            ptr::null(),
-                        );
-                        if resizer.scale.is_null() {
-                            return Err(failure("cannot initialize resize"));
-                        }
-                        resizer.config = config;
-                        av::av_frame_unref(resizer.frame);
-                        (*resizer.frame).width = w;
-                        (*resizer.frame).height = h;
-                        (*resizer.frame).format = format as i32;
-                        check(
-                            av::av_frame_get_buffer(resizer.frame, 32),
-                            "allocate resize frame",
-                        )?;
-                    }
-                    let source = [data, ptr::null(), ptr::null(), ptr::null()];
-                    let strides = [linesize, 0, 0, 0];
-                    let rows = av::sws_scale(
-                        resizer.scale,
-                        source.as_ptr(),
-                        strides.as_ptr(),
-                        0,
+                    let mut planes = [ptr::null(); 8];
+                    let mut strides = [0; 8];
+                    (planes[0], strides[0]) = (data, linesize);
+                    let region = Region {
+                        data: planes,
+                        linesize: strides,
+                        format,
+                        width,
                         height,
-                        (*resizer.frame).data.as_ptr(),
-                        (*resizer.frame).linesize.as_ptr(),
-                    );
-                    if rows != h {
-                        return Err(failure("resize failed"));
-                    }
-                    data = (*resizer.frame).data[0];
-                    linesize = (*resizer.frame).linesize[0];
+                        chroma_position: (-513, -513),
+                    };
+                    (data, linesize) = self.resize(slot, &region, (w, h), high_depth, None)?;
                     (width, height) = (w, h);
-                    resize += 1;
+                    slot += 1;
                 }
             }
         }
         Ok((data, linesize))
+    }
+
+    /// Resizes `region` to `size` (width, height) RGB in resize slot `slot`; `colors` is the decoded frame
+    /// whose color space and range apply when the region holds its planes. Returns the first row and stride.
+    unsafe fn resize(
+        &mut self,
+        slot: usize,
+        region: &Region,
+        (width, height): (i32, i32),
+        high_depth: bool,
+        colors: Option<&av::AVFrame>,
+    ) -> Result<(*const u8, i32)> {
+        while self.resizers.len() <= slot {
+            self.resizers.push(Resizer::new()?);
+        }
+        let resizer = &mut self.resizers[slot];
+        let (planar, packed, bytes) = if high_depth {
+            (
+                av::AVPixelFormat::AV_PIX_FMT_GBRP16LE,
+                av::AVPixelFormat::AV_PIX_FMT_RGB48LE,
+                2,
+            )
+        } else {
+            (
+                av::AVPixelFormat::AV_PIX_FMT_GBRP,
+                av::AVPixelFormat::AV_PIX_FMT_RGB24,
+                1,
+            )
+        };
+        let config = [
+            region.width,
+            region.height,
+            region.format as i32,
+            width,
+            height,
+            planar as i32,
+            region.chroma_position.0,
+            region.chroma_position.1,
+        ];
+        if resizer.scale.is_null() || resizer.config != config {
+            av::sws_freeContext(resizer.scale);
+            // Full-resolution chroma on both sides: interpolated from subsampled planes, not decimated from RGB.
+            resizer.scale = scale_context(
+                (region.width, region.height, region.format),
+                (width, height, planar),
+                av::SWS_BILINEAR | av::SWS_FULL_CHR_H_INT | av::SWS_FULL_CHR_H_INP,
+                region.chroma_position,
+            );
+            if resizer.scale.is_null() {
+                return Err(failure("cannot initialize resize"));
+            }
+            resizer.config = config;
+        }
+        if let Some(frame) = colors {
+            configure_colors(resizer.scale, frame)?;
+        }
+        ensure_frame(resizer.planar, width, height, planar)?;
+        ensure_frame(resizer.frame, width, height, packed)?;
+        let rows = av::sws_scale(
+            resizer.scale,
+            region.data.as_ptr(),
+            region.linesize.as_ptr(),
+            0,
+            region.height,
+            (*resizer.planar).data.as_ptr(),
+            (*resizer.planar).linesize.as_ptr(),
+        );
+        if rows != height {
+            return Err(failure("resize failed"));
+        }
+        interleave(&*resizer.planar, &*resizer.frame, bytes);
+        Ok(((*resizer.frame).data[0], (*resizer.frame).linesize[0]))
     }
 
     pub fn audio(&mut self, rate: i32, channels: i32, stop: Option<f64>) -> Result<Audio> {
@@ -1334,6 +1347,281 @@ pub struct Audio {
     pub data: Vec<f32>,
     pub samples: usize,
     pub pts: f64,
+}
+
+/// A region: (top, left, height, width).
+type Rect = (i32, i32, i32, i32);
+
+/// How `ops` run on decoded frames. Leading crops and the first resize are one swscale pass from the decoded
+/// planes to RGB at the output size, and a display rotation before them moves after that resize (right-angle
+/// turns commute with the resampling, up to rounding). Without a resize, frames are converted at full size and
+/// the crops select RGB pixels.
+struct Pipeline {
+    /// Region of the decoded frame and output (height, width) of the first resize, both in the decoded
+    /// (unrotated) orientation.
+    first: Option<(Rect, (i32, i32))>,
+    /// Ops on the first resize's RGB output: the display rotation, then those after the resize.
+    after_first: Vec<Op>,
+    /// Ops on a frame converted at full size: all of them, for pipelines without a resize and for frames whose
+    /// region `region_planes` cannot address.
+    ops: Vec<Op>,
+}
+impl Pipeline {
+    /// Plans `ops` for decoded frames of `size` (width, height), dropping resizes to the current size.
+    fn new(ops: &[Op], (width, height): (i32, i32)) -> Self {
+        let mut size = (height, width);
+        let ops: Vec<Op> = ops
+            .iter()
+            .copied()
+            .filter(|op| {
+                let previous = size;
+                size = match *op {
+                    Op::Rotate { turns } if turns % 2 == 1 => (size.1, size.0),
+                    Op::Rotate { .. } => size,
+                    Op::Crop { height, width, .. } | Op::Resize { height, width } => {
+                        (height, width)
+                    }
+                };
+                !matches!(op, Op::Resize { .. }) || size != previous
+            })
+            .collect();
+        let (turns, body) = match ops.first() {
+            Some(&Op::Rotate { turns }) => (turns, &ops[1..]),
+            _ => (0, &ops[..]),
+        };
+        let (mut top, mut left) = (0, 0);
+        let (mut h, mut w) = if turns % 2 == 1 {
+            (width, height)
+        } else {
+            (height, width)
+        };
+        for (i, op) in body.iter().enumerate() {
+            match *op {
+                Op::Crop {
+                    top: t,
+                    left: l,
+                    height: ch,
+                    width: cw,
+                } => (top, left, h, w) = (top + t, left + l, ch, cw),
+                Op::Resize {
+                    height: oh,
+                    width: ow,
+                } => {
+                    // Inverse of `transform`'s rotation: the rotated region's pixels in the decoded frame.
+                    let region = match turns {
+                        1 => (left, width - top - h, w, h),
+                        2 => (height - top - h, width - left - w, h, w),
+                        3 => (height - left - w, top, w, h),
+                        _ => (top, left, h, w),
+                    };
+                    let output = if turns % 2 == 1 { (ow, oh) } else { (oh, ow) };
+                    let mut after_first = Vec::with_capacity(body.len() - i);
+                    if turns != 0 {
+                        after_first.push(Op::Rotate { turns });
+                    }
+                    after_first.extend_from_slice(&body[i + 1..]);
+                    return Self {
+                        first: Some((region, output)),
+                        after_first,
+                        ops,
+                    };
+                }
+                Op::Rotate { .. } => break,
+            }
+        }
+        Self {
+            first: None,
+            after_first: Vec::new(),
+            ops,
+        }
+    }
+}
+
+/// The planes of `rect` in `frame`. An offset inside a subsampled chroma pair starts the chroma plane at the pair
+/// and moves the chroma siting back to match. None when the format cannot be addressed by plane offsets
+/// (paletted, bitstream, hardware, or packed with subsampled chroma).
+unsafe fn region_planes(frame: &av::AVFrame, rect: Rect) -> Option<Region> {
+    let (top, left, height, width) = rect;
+    let mut region = Region {
+        data: frame.data.map(|p| p as *const u8),
+        linesize: frame.linesize,
+        format: std::mem::transmute::<i32, av::AVPixelFormat>(frame.format),
+        width,
+        height,
+        chroma_position: (-513, -513),
+    };
+    if rect == (0, 0, frame.height, frame.width) {
+        return Some(region);
+    }
+    let descriptor = av::av_pix_fmt_desc_get(region.format);
+    if descriptor.is_null() {
+        return None;
+    }
+    let descriptor = &*descriptor;
+    let flags = descriptor.flags as i32;
+    let (shift_x, shift_y) = (
+        descriptor.log2_chroma_w as i32,
+        descriptor.log2_chroma_h as i32,
+    );
+    let planar = flags & av::AV_PIX_FMT_FLAG_PLANAR != 0;
+    if flags
+        & (av::AV_PIX_FMT_FLAG_PAL | av::AV_PIX_FMT_FLAG_BITSTREAM | av::AV_PIX_FMT_FLAG_HWACCEL)
+        != 0
+        || !planar && (shift_x != 0 || shift_y != 0)
+    {
+        return None;
+    }
+    for (plane, pointer) in region.data.iter_mut().enumerate() {
+        if pointer.is_null() {
+            continue;
+        }
+        let (index, component) = descriptor.comp[..descriptor.nb_components as usize]
+            .iter()
+            .enumerate()
+            .find(|(_, c)| c.plane as usize == plane)?;
+        let chroma = planar && flags & av::AV_PIX_FMT_FLAG_RGB == 0 && (index == 1 || index == 2);
+        let (y, x) = if chroma {
+            (top >> shift_y, left >> shift_x)
+        } else {
+            (top, left)
+        };
+        // `step`: bytes between horizontally adjacent samples of this plane (a whole pixel, padding included,
+        // in packed formats).
+        *pointer = pointer.offset(
+            y as isize * frame.linesize[plane] as isize + x as isize * component.step as isize,
+        );
+    }
+    let position = |shift: i32, offset: i32| {
+        let phase = offset & ((1 << shift) - 1);
+        if phase == 0 {
+            -513
+        } else {
+            ((128 << shift) - 128) - 256 * phase
+        }
+    };
+    region.chroma_position = (position(shift_x, left), position(shift_y, top));
+    Some(region)
+}
+
+/// Applies the frame's color space and range to `scale` (unspecified ones keep swscale's defaults).
+unsafe fn configure_colors(scale: *mut av::SwsContext, frame: &av::AVFrame) -> Result<()> {
+    let mut inverse = ptr::null_mut();
+    let mut table = ptr::null_mut();
+    let (mut source_range, mut destination_range, mut brightness, mut contrast, mut saturation) =
+        (0, 0, 0, 0, 0);
+    check(
+        av::sws_getColorspaceDetails(
+            scale,
+            &mut inverse,
+            &mut source_range,
+            &mut table,
+            &mut destination_range,
+            &mut brightness,
+            &mut contrast,
+            &mut saturation,
+        ),
+        "read color conversion settings",
+    )?;
+    if frame.color_range != av::AVColorRange::AVCOL_RANGE_UNSPECIFIED {
+        source_range = i32::from(frame.color_range == av::AVColorRange::AVCOL_RANGE_JPEG);
+    }
+    let coefficients = av::sws_getCoefficients(frame.colorspace as i32);
+    check(
+        av::sws_setColorspaceDetails(
+            scale,
+            coefficients,
+            source_range,
+            coefficients,
+            destination_range,
+            brightness,
+            contrast,
+            saturation,
+        ),
+        "configure color conversion",
+    )
+}
+
+/// (Re)allocates `frame` unless it already has this size and format.
+unsafe fn ensure_frame(
+    frame: *mut av::AVFrame,
+    width: i32,
+    height: i32,
+    format: av::AVPixelFormat,
+) -> Result<()> {
+    if (*frame).width != width || (*frame).height != height || (*frame).format != format as i32 {
+        av::av_frame_unref(frame);
+        (*frame).width = width;
+        (*frame).height = height;
+        (*frame).format = format as i32;
+        check(av::av_frame_get_buffer(frame, 32), "allocate RGB frame")?;
+    }
+    Ok(())
+}
+
+unsafe fn scale_context(
+    (source_width, source_height, source_format): (i32, i32, av::AVPixelFormat),
+    (width, height, format): (i32, i32, av::AVPixelFormat),
+    flags: i32,
+    (chroma_x, chroma_y): (i32, i32),
+) -> *mut av::SwsContext {
+    let context = av::sws_alloc_context();
+    if context.is_null() {
+        return context;
+    }
+    let options = [
+        (c"srcw", source_width),
+        (c"srch", source_height),
+        (c"src_format", source_format as i32),
+        (c"dstw", width),
+        (c"dsth", height),
+        (c"dst_format", format as i32),
+        (c"sws_flags", flags),
+        (c"src_h_chr_pos", chroma_x),
+        (c"src_v_chr_pos", chroma_y),
+    ];
+    for (name, value) in options {
+        if av::av_opt_set_int(context as *mut c_void, name.as_ptr(), value.into(), 0) < 0 {
+            av::sws_freeContext(context);
+            return ptr::null_mut();
+        }
+    }
+    if av::sws_init_context(context, ptr::null_mut(), ptr::null_mut()) < 0 {
+        av::sws_freeContext(context);
+        return ptr::null_mut();
+    }
+    context
+}
+
+/// Interleaves planar G, B, R (`bytes` per sample) into packed RGB of the same size.
+unsafe fn interleave(planar: &av::AVFrame, packed: &av::AVFrame, bytes: usize) {
+    let width = planar.width as usize;
+    for y in 0..planar.height as isize {
+        let plane = |i: usize| {
+            std::slice::from_raw_parts(
+                planar.data[i].offset(y * planar.linesize[i] as isize),
+                width * bytes,
+            )
+        };
+        let (g, b, r) = (plane(0), plane(1), plane(2));
+        let out = std::slice::from_raw_parts_mut(
+            packed.data[0].offset(y * packed.linesize[0] as isize),
+            width * 3 * bytes,
+        );
+        if bytes == 1 {
+            for (((p, &r), &g), &b) in out.as_chunks_mut::<3>().0.iter_mut().zip(r).zip(g).zip(b) {
+                *p = [r, g, b];
+            }
+        } else {
+            let (r, g, b) = (
+                r.as_chunks::<2>().0,
+                g.as_chunks::<2>().0,
+                b.as_chunks::<2>().0,
+            );
+            for (((p, r), g), b) in out.as_chunks_mut::<6>().0.iter_mut().zip(r).zip(g).zip(b) {
+                *p = [r[0], r[1], g[0], g[1], b[0], b[1]];
+            }
+        }
+    }
 }
 
 fn seconds_per_tick(time_base: av::AVRational) -> f64 {
