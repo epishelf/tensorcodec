@@ -37,7 +37,7 @@ test -f "$FFMPEG_DIR/include/libavcodec/avcodec.h"
 test -f "$FFMPEG_DIR/lib/libavcodec.so.61"
 
 uv venv
-uv pip install 'tensorcodec==0.4.1' 'tensorcodec-av==0.4.1' --no-binary tensorcodec-av
+uv pip install 'tensorcodec==0.4.2' 'tensorcodec-av==0.4.2' --no-binary tensorcodec-av
 ```
 
 Only `tensorcodec-av` is built from source; naming it also covers platforms

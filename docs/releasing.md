@@ -1,6 +1,6 @@
 # Publishing TensorCodec
 
-Release version: `0.4.1`. Each release publishes two PyPI projects at the same version:
+Release version: `0.4.2`. Each release publishes two PyPI projects at the same version:
 `tensorcodec` (pure Python, built by hatchling) and `tensorcodec-av` (the FFmpeg
 extension in `av/`, built by maturin). `tensorcodec` pins `tensorcodec-av==<version>`
 behind a platform marker; bump the version in `pyproject.toml` (twice), `av/Cargo.toml`,
