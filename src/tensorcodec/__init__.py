@@ -3,5 +3,5 @@
 from tensorcodec import decoders, transforms
 from tensorcodec._frame import AudioSamples, Frame, FrameBatch
 
-__version__ = "0.4.0"
+__version__ = "0.4.1"
 __all__ = ["AudioSamples", "Frame", "FrameBatch", "decoders", "transforms"]
