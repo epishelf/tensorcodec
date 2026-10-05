@@ -1,6 +1,6 @@
 # Publishing TensorCodec
 
-Release version: `0.4.0`. Each release publishes two PyPI projects at the same version:
+Release version: `0.4.1`. Each release publishes two PyPI projects at the same version:
 `tensorcodec` (pure Python, built by hatchling) and `tensorcodec-av` (the FFmpeg
 extension in `av/`, built by maturin). `tensorcodec` pins `tensorcodec-av==<version>`
 behind a platform marker; bump the version in `pyproject.toml` (twice), `av/Cargo.toml`,
@@ -65,7 +65,7 @@ and source links are recorded in `av/licenses/README.md`.
   conda-forge dependency graph.
 - Release validation installs each repaired wheel with the `tensorcodec` wheel on glibc 2.17 with Python 3.10
   and 3.13 and decodes video/audio without Torch, PyAV or a system FFmpeg. Python
-  3.10 also checks the minimum NumPy line (2.0.2). Native
+  3.10 also checks the minimum NumPy line (1.26.4, with OpenCV 4.11). Native
   x86_64 and ARM64 runners also run the full pinned playback oracle comparison.
 - Release validation still tests the installed repaired wheel. The fixture CLI
   can be FFmpeg 6 or 7; fixtures explicitly remove auxiliary sentinel packets.

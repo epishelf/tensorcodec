@@ -1,6 +1,6 @@
 [package]
 name = "tensorcodec-av"
-version = "0.4.0"
+version = "0.4.1"
 edition = "2021"
 rust-version = "1.88"  # ffmpeg-sys-next 9 builds with let chains
 license = "Apache-2.0"

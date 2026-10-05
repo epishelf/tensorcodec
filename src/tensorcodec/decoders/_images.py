@@ -193,7 +193,7 @@ def _image(source, codec, mode, output_dtype):
     channels = _png_channels(data) if codec == "png" else None
     if codec == "heic":
         raise NotImplementedError("HEIC decoding is not supported by the OpenCV image adapter")
-    cv = opencv()
+    cv = opencv(codec)
     flags = cv.IMREAD_UNCHANGED
     if codec == "jpeg":
         if _jpeg_components(data) == 4 and mode is ImageReadMode.UNCHANGED:
@@ -271,8 +271,8 @@ def decode_image(source, *, mode="RGB", output_dtype=np.uint8):
     Sources are paths, bytes or 1-D uint8 arrays. Modes: UNCHANGED, GRAY,
     GRAY_ALPHA, RGB, RGB_ALPHA (case-insensitive strings or ImageReadMode).
     output_dtype is uint8, uint16 or 'auto'; integer conversion scales the range.
-    BMP is detected too. Requires OpenCV >= 4.12. HEIC and animated PNG
-    are unsupported.
+    BMP is detected too. GIF and AVIF require OpenCV >= 4.12. HEIC and
+    animated PNG are unsupported.
     """
     return _image(source, None, mode, output_dtype)
 

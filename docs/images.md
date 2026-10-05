@@ -16,9 +16,11 @@ encoded = JpegEncoder(rgb).to_tensor(quality=90)  # 1-D uint8 NumPy array
 
 ## Installation
 
-`uv pip install tensorcodec` includes the image backend: `opencv-python-headless` 4.12+
-(tested with 4.12, 4.13 and 5.0), imported only when an image codec is first used. Earlier
-wheels lack the GIF and AVIF decoders. Use only one OpenCV wheel variant per environment:
+`uv pip install tensorcodec` includes the image backend: `opencv-python-headless` 4.11+
+(tested with 4.11, 4.12, 4.13 and 5.0), imported only when an image codec is first used.
+GIF and AVIF decoding needs 4.12+, which requires NumPy 2; 4.11 wheels lack those decoders
+and raise an error naming the required version. 4.11 works with NumPy 1.26 and 2.x.
+Use only one OpenCV wheel variant per environment:
 another variant such as `opencv-python` also provides `cv2` and conflicts with it.
 Pillow is used only in tests.
 

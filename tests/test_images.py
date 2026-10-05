@@ -61,6 +61,17 @@ def encoded_images(tmp_path_factory):
     return root
 
 
+def opencv_lacks(backend, codec):
+    """GIF/AVIF need OpenCV 4.12; older wheels must raise rather than decode."""
+    if backend.__name__.startswith("torchcodec"):
+        return False
+    import cv2
+
+    from tensorcodec._opencv import CODEC_MIN_VERSION, version
+
+    return version(cv2) < CODEC_MIN_VERSION.get(codec, (0,))
+
+
 @pytest.mark.parametrize("channels", [1, 2, 3, 4])
 @pytest.mark.parametrize("depth", [8, 16])
 def test_png_native_samples(backend, channels, depth):
@@ -117,6 +128,10 @@ def test_image_sources_and_content_detection(backend, tmp_path, kind):
 @pytest.mark.parametrize("codec", ["jpeg", "webp", "gif", "avif"])
 def test_format_functions_and_dispatch(backend, encoded_images, codec):
     path = encoded_images / f"image.{codec}"
+    if opencv_lacks(backend, codec):
+        with pytest.raises(RuntimeError, match=r"OpenCV >= 4\.12 \(which requires NumPy >= 2\)"):
+            getattr(backend, f"decode_{codec}")(path)
+        return
     if codec == "avif" and not backend.__name__.startswith("torchcodec"):
         import cv2
 
@@ -142,6 +157,8 @@ def test_jpeg_batch(backend, encoded_images):
 
 
 def test_gif_animation(backend, encoded_images):
+    if opencv_lacks(backend, "gif"):
+        pytest.skip("GIF needs OpenCV 4.12")
     frames = as_numpy(backend.decode_gif(encoded_images / "animated.gif"))
     assert frames.shape == (2, 3, 16, 24)
     assert not np.array_equal(frames[0], frames[1])
@@ -181,6 +198,21 @@ def test_image_errors_and_cpu_boundary():
         decode_avif(b"", num_threads=0)
     with pytest.raises(FileNotFoundError):
         decode_image(Path("/nonexistent/image.png"))
+
+
+@pytest.mark.parametrize("codec", ["gif", "avif"])
+def test_codec_version_floor(monkeypatch, encoded_images, codec):
+    import cv2
+
+    from tensorcodec import decoders
+
+    monkeypatch.setattr(cv2, "__version__", "4.11.0")
+    with pytest.raises(RuntimeError, match=rf"{codec.upper()} decoding requires OpenCV >= 4\.12 .*NumPy >= 2"):
+        getattr(decoders, f"decode_{codec}")(encoded_images / f"image.{codec}")
+    assert decoders.decode_image(encoded_images / "image.webp").shape == (3, 16, 24)
+    monkeypatch.setattr(cv2, "__version__", "4.10.0")
+    with pytest.raises(ImportError, match=r"OpenCV >= 4\.11"):
+        decoders.decode_image(encoded_images / "image.webp")
 
 
 def test_heic_is_explicitly_unsupported():
